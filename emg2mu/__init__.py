@@ -1,1 +1,1 @@
-from .shablona import *  # noqa
+from .emg2mu import *  # noqa
