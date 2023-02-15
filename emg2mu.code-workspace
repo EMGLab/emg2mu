@@ -19,6 +19,11 @@
 			"--ignore=E128,W504,E125",
 		],
 		"editor.rulers": [
-			80, 120]
+			80,
+			120
+		],
+		"cSpell.words": [
+			"monopolar"
+		]
 	}
 }

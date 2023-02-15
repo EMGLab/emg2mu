@@ -49,7 +49,7 @@ def awgn(sig, reqSNR, *args):
     # Validate signal power
     if len(args) >= 1:
         if isinstance(args[0], str) and args[0].lower() == 'measured':
-            sigPower = np.sum(np.abs(sig)**2)/sig.size
+            sigPower = np.sum(np.abs(sig)**2) / sig.size
         else:
             sigPower = args[0]
             if not isinstance(sigPower, (int, float)) or sigPower <= 0:
@@ -74,8 +74,8 @@ def awgn(sig, reqSNR, *args):
     # Convert signal power and SNR to linear scale
     if not isLinearScale:
         if len(args) >= 1 and not isinstance(args[0], str):
-            sigPower = 10**(sigPower/10)
-        reqSNR = 10**(reqSNR/10)
+            sigPower = 10**(sigPower / 10)
+        reqSNR = 10**(reqSNR / 10)
     
     # Check for invalid signal power and SNR for linear scale
     if isLinearScale and sigPower <= 0:
@@ -83,11 +83,11 @@ def awgn(sig, reqSNR, *args):
     if isLinearScale and reqSNR <= 0:
         raise ValueError("The SNR must be positive for linear scale.")
     
-    noisePower = sigPower/reqSNR
+    noisePower = sigPower / reqSNR
     
     # Add noise
     if np.iscomplexobj(sig):
-        noise = np.sqrt(noisePower/2) * (np.random.randn(*sig.shape) + 1j*np.random.randn(*sig.shape))
+        noise = np.sqrt(noisePower / 2) * (np.random.randn(*sig.shape) + 1j * np.random.randn(*sig.shape))
     else:
         noise = np.sqrt(noisePower) * np.random.randn(*sig.shape)
     
@@ -96,16 +96,18 @@ def awgn(sig, reqSNR, *args):
 
 
 class EMG:
-        """
-    motor-unit decomposition on hdEMG datasets
+    """
+    # motor-unit decomposition on hdEMG datasets
     
     This function and the helper files are mainly a python implementation of the code accompanied with
     Hyser Dataset by Jian et. al.
     The original code and the dataset is also available at PhysioNet
 
-    Parameters:
+    Parameters
+    ----------
     data : str or numpy.ndarray
-        The path to the hdEMG data. If 'data' is pointing to the location of the data file, the data file must be a MAT array.
+        The path to the hdEMG data. If 'data' is pointing to the location of the data file, the data file must be
+        a MAT array.
         Default is the sample file included in the toolbox.
     data_mode : str, optional
         EMG can be recorded in the 'monopolar' or 'bipolar' mode. Default = 'monopolar'
@@ -118,11 +120,13 @@ class EMG:
     whiten_flag : int, optional
         Whether to whiten the data prior to the ICA. Default = 1
     inject_noise : float, optional
-        Adding white noise to the EMG mixutre. Uses Communication Toolbox AWGN function. Default = Inf for not injecting any artificial noise.
+        Adding white noise to the EMG mixutre. Uses Communication Toolbox AWGN function.
+        Default = Inf for not injecting any artificial noise.
     silhouette_threshold : float, optional
         The silhouette threshold to detect the good motor units. Default = 0.6
     output_file : str, optional
-        The path that the files should be saved there. The function does not create the path, rather uses it. Default is the is the 'sample' path of the toolbox.
+        The path that the files should be saved there. The function does not create the path, rather uses it.
+        Default is the is the 'sample' path of the toolbox.
     save_flag : int, optional
         Whether the files are saved or not, default is 0, so it is NOT saving your output.
     plot_spikeTrain : int, optional
@@ -130,7 +134,8 @@ class EMG:
     load_ICA : int, optional
         Whether to load precomputed ICA results for debugging. Default is 0
     
-    Returns:
+    Returns
+    -------
     motor_unit : dict
         The structure including the following fields:
         spike_train
@@ -157,8 +162,7 @@ class EMG:
         self.load_ICA = load_ICA
         self.motor_unit = {}
 
-
-    def preprocess_emg(self, data_mode='monopolar', whiten_flag=True, R=4, SNR=np.inf, array_shape=[8,8]):
+    def preprocess_emg(self, data_mode='monopolar', whiten_flag=True, R=4, SNR=np.inf, array_shape=[8, 8]):
         '''
         Prepares the emg array for decomposition.
 
@@ -171,11 +175,13 @@ class EMG:
         whiten_flag : bool
             Whether to whiten the data prior to the ICA. Default = 1
         SNR : float
-            Adding white noise to the EMG mixture. Uses Communication Toolbox AWGN function. Default = Inf for not injecting any artificial noise.
+            Adding white noise to the EMG mixture. Uses Communication Toolbox AWGN function.
+            Default = Inf for not injecting any artificial noise.
         R : int
             The number of times to repeat the data blocks, see the Hyser paper for more detail. Default = 4
         array_shape : list-like
-            The first element will be used to calculate the bipolar activity if the bipolar flag is on for the 'data_mode'.
+            The first element will be used to calculate the bipolar activity if the bipolar flag is
+            on for the 'data_mode'.
         
         Returns
         -------
@@ -193,13 +199,13 @@ class EMG:
         # Add white noise
         if not np.isinf(SNR):
             emg = self.awgn(emg, SNR, 'dB')
-        
+
         # create a bipolar setting from the monopolar data
         if data_mode == "bipolar":
             for i in range(num_chan - array_shape[0]):
                 emg[:, i] = emg[:, i] - emg[:, i + array_shape[0]]
             emg = emg[:, :-8]
-        
+
         extended_emg = np.zeros((emg.shape[0], emg.shape[1] * (R + 1)))
         extended_emg[:, :emg.shape[1]] = emg  # to make a consistent downstream
         if R != 0:
@@ -210,8 +216,8 @@ class EMG:
                 # small delay, R/freq, which with R=64, delay = 64/2048= 31ms.
                 # This addition reinforces finding MUAPs, despite having
                 # duplicates. Later on, the duplicates will be removed.
-                extended_emg[i+1:, emg.shape[1] * i : emg.shape[1] * (i + 1)] = emg[:-i, :]
-        
+                extended_emg[i + 1:, emg.shape[1] * i: emg.shape[1] * (i + 1)] = emg[:-i, :]
+
         if whiten_flag:
             whitened_data, _, _, W = self.whiten(extended_emg)
             preprocessed_emg = whitened_data
@@ -220,11 +226,11 @@ class EMG:
 
         self._preprocessed_emg = preprocessed_emg
         return self
-    
+
     def _torch_fastICA(emg, M, max_iter):
         """
         Run the ICA decomposition
-        
+
         Parameters:
         extended_emg : numpy.ndarray
             The preprocessed extended EMG data
@@ -232,8 +238,7 @@ class EMG:
             Maximum number of sources being decomposed by (FAST) ICA
         max_iter : int
             Maximum iterations for the (FAST) ICA decompsition
-        
-        Returns:
+                Returns:
         uncleaned_source : numpy.ndarray
             The uncleaned sources from the ICA decomposition
         B : numpy.ndarray
@@ -258,12 +263,12 @@ class EMG:
         for i in range(M):
             w = torch.empty(num_chan, 2, device=device).normal_(mean=0, std=1)
             for n in range(2, max_iter):
-                dot_product = torch.matmul(w[:, n-1].unsqueeze(1), emg)
+                dot_product = torch.matmul(w[:, n - 1].unsqueeze(1), emg)
                 A = 2 * torch.mean(dot_product)
-                w_new = emg * dot_product.pow(2) - A * w[:, n-1].unsqueeze(1)
+                w_new = emg * dot_product.pow(2) - A * w[:, n - 1].unsqueeze(1)
                 w_new = w_new - torch.matmul(torch.matmul(B[:, i].unsqueeze(0), B[:, i].unsqueeze(1)), w_new)
                 w_new = w_new / w_new.norm()
-                if (w[:, n-1].unsqueeze(1).matmul(w_new) - 1).abs() <= tolerance:
+                if (w[:, n - 1].unsqueeze(1).matmul(w_new) - 1).abs() <= tolerance:
                     break
                 w = torch.cat((w, w_new), dim=1)
             source[:, i] = torch.matmul(w[:, -1].unsqueeze(1), emg).squeeze()
@@ -295,7 +300,7 @@ class EMG:
             w.append(np.random.randn(num_chan, 1))
             w.append(np.random.randn(num_chan, 1))
             for n in range(2, max_iter):
-                if abs(np.dot(w[n].T, w[n-1]) - 1) > tolerance:
+                if abs(np.dot(w[n].T, w[n - 1]) - 1) > tolerance:
                     A = np.mean(2 * np.dot(w[n].T, emg))
                     w.append(emg @ ((np.dot(w[n].T, emg).T) ** 2) - A * w[n])
                     w[-1] = w[-1] - np.dot(np.dot(B, B.T), w[-1])
@@ -306,7 +311,8 @@ class EMG:
             pks = np.power(source[:, i], 2)
             loc = np.array([index for index, value in enumerate(pks) if value == np.max(pks)])
             idx = np.array([1 if i < len(pks) / 2 else 2 for i in range(len(pks))])
-            sil_score = np.array([(pks[i] - np.mean([pks[j] for j in range(len(pks)) if idx[j] == idx[i]])) / np.std([pks[j] for j in range(len(pks)) if idx[j] == idx[i]]) for i in range(len(pks))])
+            sil_score = np.array([(pks[i] - np.mean([pks[j] for j in range(len(pks)) if idx[j] ==
+                idx[i]])) / np.std([pks[j] for j in range(len(pks)) if idx[j] == idx[i]]) for i in range(len(pks))])
             score[i] = (np.mean(sil_score[idx == 1]) + np.mean(sil_score[idx == 2])) / 2
             if sum(idx == 1) <= sum(idx == 2):
                 spike_loc = loc[idx == 1]
@@ -319,43 +325,43 @@ class EMG:
         print("\nICA decomposition is completed")
         return source, B, spike_train, score
     
-    # def remove_motorUnit_duplicates(self, uncleaned_spkieTrain, uncleaned_source, frq):
-    #     """
-    #     Remove the duplicate motor units
+    def remove_motorUnit_duplicates(self, uncleaned_spkieTrain, uncleaned_source, frq):
+        """
+        Remove the duplicate motor units
         
-    #     Parameters:
-    #     uncleaned_spkieTrain : numpy.ndarray
-    #         The uncleaned spike train
-    #     uncleaned_source : numpy.ndarray
-    #         The uncleaned sources from the ICA decomposition
-    #     frq : int
-    #         The sampling frequency of the data
+        Parameters:
+        uncleaned_spkieTrain : numpy.ndarray
+            The uncleaned spike train
+        uncleaned_source : numpy.ndarray
+            The uncleaned sources from the ICA decomposition
+        frq : int
+            The sampling frequency of the data
         
-    #     Returns:
-    #     spike_train : numpy.ndarray
-    #         The spike train of the good motor units
-    #     source : numpy.ndarray
-    #         The sources of the good motor units
-    #     good_idx : numpy.ndarray
-    #         The indices of the good motor units
-    #     """
-    #     pass
+        Returns:
+        spike_train : numpy.ndarray
+            The spike train of the good motor units
+        source : numpy.ndarray
+            The sources of the good motor units
+        good_idx : numpy.ndarray
+            The indices of the good motor units
+        """
+        pass
     
-    # def spikeTrain_plot(self, spike_train, frq, silhouette_score, minScore_toPlot):
-    #     """
-    #     Plot the spike train of the good motor units
+    def spikeTrain_plot(self, spike_train, frq, silhouette_score, minScore_toPlot):
+        """
+        Plot the spike train of the good motor units
         
-    #     Parameters:
-    #     spike_train : numpy.ndarray
-    #         The spike train of the good motor units
-    #     frq : int
-    #         The sampling frequency of the data
-    #     silhouette_score : numpy.ndarray
-    #         The silhouette score of the good motor units
-    #     minScore_toPlot : float
-    #         The minimum silhouette score of the motor units to be included in the plot
-    #     """
-    #     pass
+        Parameters:
+        spike_train : numpy.ndarray
+            The spike train of the good motor units
+        frq : int
+            The sampling frequency of the data
+        silhouette_score : numpy.ndarray
+            The silhouette score of the good motor units
+        minScore_toPlot : float
+            The minimum silhouette score of the motor units to be included in the plot
+        """
+        pass
     
     def run_decomposition(self):
         """
@@ -384,8 +390,9 @@ class EMG:
             uncleaned_source = ica_results['uncleaned_source']
             uncleaned_spkieTrain = ica_results['uncleaned_spkieTrain']
             score = ica_results['score']
-            B = ica_results['B']
-        spike_train, source, good_idx = self.remove_motorUnit_duplicates(uncleaned_spkieTrain, uncleaned_source, self.frq)
+            self.B = ica_results['B']
+        spike_train, source, good_idx = self.remove_motorUnit_duplicates(uncleaned_spkieTrain, uncleaned_source,
+        self.frq)
         silhouette_score = score[good_idx]
         
         # save the results
