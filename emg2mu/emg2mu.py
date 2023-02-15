@@ -1,6 +1,6 @@
-import argparse
 import numpy as np
 import warnings
+
 
 def awgn(sig, reqSNR, *args):
     """
@@ -94,51 +94,55 @@ def awgn(sig, reqSNR, *args):
     y = sig + noise
     return y
 
-class EMG:
-    def __init__(self, data, data_mode='monopolar', sampling_frequency=2048, extension_parameter=4, max_sources=300, whiten_flag=1, inject_noise=np.inf, silhouette_threshold=0.6, output_file='sample_decomposed', 
-                 save_flag=0, plot_spikeTrain=1, load_ICA=0):
-        """
-        motor-unit decomposition on hdEMG datasets
-        
-        This function and the helper files are mainly a python implementation of the code accompanied with Hyser Dataset by Jian et. al.
-        The original code and the dataset is also available at PhysioNet
 
-        Parameters:
-        data : str or numpy.ndarray
-            The path to the hdEMG data. If 'data' is pointing to the location of the data file, the data file must be a MAT array.
-            Default is the sample file included in the toolbox.
-        data_mode : str, optional
-            EMG can be recorded in the 'monopolar' or 'bipolar' mode. Default = 'monopolar'
-        sampling_frequency : int, optional
-            Sampling frequency of the data, default = 2048 Hz
-        extension_parameter : int, optional
-            The number of times to repeat the data blocks, see the Hyser paper for more detail. Default = 4
-        max_sources : int, optional
-            Maximum iterations for the (FAST) ICA decompsition. Default = 300
-        whiten_flag : int, optional
-            Whether to whiten the data prior to the ICA. Default = 1
-        inject_noise : float, optional
-            Adding white noise to the EMG mixutre. Uses Communication Toolbox AWGN function. Default = Inf for not injecting any artificial noise.
-        silhouette_threshold : float, optional
-            The silhouette threshold to detect the good motor units. Default = 0.6
-        output_file : str, optional
-            The path that the files should be saved there. The function does not create the path, rather uses it. Default is the is the 'sample' path of the toolbox.
-        save_flag : int, optional
-            Whether the files are saved or not, default is 0, so it is NOT saving your output.
-        plot_spikeTrain : int, optional
-            Whether to plot the resulting spike trains. Default is 1
-        load_ICA : int, optional
-            Whether to load precomputed ICA results for debugging. Default is 0
-        
-        Returns:
-        motor_unit : dict
-            The structure including the following fields:
-            spike_train
-            waveform
-            ica_weight
-            whiten_matrix
-            silhouette
+class EMG:
         """
+    motor-unit decomposition on hdEMG datasets
+    
+    This function and the helper files are mainly a python implementation of the code accompanied with
+    Hyser Dataset by Jian et. al.
+    The original code and the dataset is also available at PhysioNet
+
+    Parameters:
+    data : str or numpy.ndarray
+        The path to the hdEMG data. If 'data' is pointing to the location of the data file, the data file must be a MAT array.
+        Default is the sample file included in the toolbox.
+    data_mode : str, optional
+        EMG can be recorded in the 'monopolar' or 'bipolar' mode. Default = 'monopolar'
+    sampling_frequency : int, optional
+        Sampling frequency of the data, default = 2048 Hz
+    extension_parameter : int, optional
+        The number of times to repeat the data blocks, see the Hyser paper for more detail. Default = 4
+    max_sources : int, optional
+        Maximum iterations for the (FAST) ICA decompsition. Default = 300
+    whiten_flag : int, optional
+        Whether to whiten the data prior to the ICA. Default = 1
+    inject_noise : float, optional
+        Adding white noise to the EMG mixutre. Uses Communication Toolbox AWGN function. Default = Inf for not injecting any artificial noise.
+    silhouette_threshold : float, optional
+        The silhouette threshold to detect the good motor units. Default = 0.6
+    output_file : str, optional
+        The path that the files should be saved there. The function does not create the path, rather uses it. Default is the is the 'sample' path of the toolbox.
+    save_flag : int, optional
+        Whether the files are saved or not, default is 0, so it is NOT saving your output.
+    plot_spikeTrain : int, optional
+        Whether to plot the resulting spike trains. Default is 1
+    load_ICA : int, optional
+        Whether to load precomputed ICA results for debugging. Default is 0
+    
+    Returns:
+    motor_unit : dict
+        The structure including the following fields:
+        spike_train
+        waveform
+        ica_weight
+        whiten_matrix
+        silhouette
+    """
+
+    def __init__(self, data, data_mode='monopolar', sampling_frequency=2048, extension_parameter=4, max_sources=300,
+                 whiten_flag=1, inject_noise=np.inf, silhouette_threshold=0.6, output_file='sample_decomposed', 
+                 save_flag=0, plot_spikeTrain=1, load_ICA=0):
         self.data = data
         self.data_mode = data_mode
         self.sampling_frequency = sampling_frequency
@@ -152,7 +156,8 @@ class EMG:
         self.plot_spikeTrain = plot_spikeTrain
         self.load_ICA = load_ICA
         self.motor_unit = {}
-        
+
+
     def preprocess_emg(self, data_mode='monopolar', whiten_flag=True, R=4, SNR=np.inf, array_shape=[8,8]):
         '''
         Prepares the emg array for decomposition.
@@ -353,7 +358,7 @@ class EMG:
     #     pass
     
     def run_decomposition(self):
-       """
+        """
         Run the motor-unit decomposition on hdEMG datasets
         
         Returns:
