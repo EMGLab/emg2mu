@@ -41,11 +41,11 @@ def awgn(sig, reqSNR, *args):
     # Validate signal input
     if not isinstance(sig, np.ndarray) or sig.size == 0:
         raise ValueError("The signal input must be a non-empty numpy array.")
-    
+
     # Validate SNR input
     if not isinstance(reqSNR, (int, float)) or reqSNR <= 0:
         raise ValueError("The SNR input must be a real scalar greater than 0.")
-    
+
     # Validate signal power
     if len(args) >= 1:
         if isinstance(args[0], str) and args[0].lower() == 'measured':
@@ -56,7 +56,7 @@ def awgn(sig, reqSNR, *args):
                 raise ValueError("The signal power input must be a real scalar greater than 0.")
     else:
         sigPower = 1
-    
+
     # Validate power type
     isLinearScale = False
     if len(args) >= 2:
@@ -64,33 +64,32 @@ def awgn(sig, reqSNR, *args):
             isLinearScale = args[1].lower() == 'linear'
         else:
             warnings.warn("The third argument must either be 'db' or 'linear'.")
-    
+
     if len(args) == 3:
         if isinstance(args[2], str) and args[2].lower() in ['db', 'linear']:
             isLinearScale = args[2].lower() == 'linear'
         else:
             warnings.warn("The fourth argument must either be 'db' or 'linear'.")
-    
+
     # Convert signal power and SNR to linear scale
     if not isLinearScale:
         if len(args) >= 1 and not isinstance(args[0], str):
             sigPower = 10**(sigPower / 10)
         reqSNR = 10**(reqSNR / 10)
-    
+
     # Check for invalid signal power and SNR for linear scale
     if isLinearScale and sigPower <= 0:
         raise ValueError("The signal power must be positive for linear scale.")
     if isLinearScale and reqSNR <= 0:
         raise ValueError("The SNR must be positive for linear scale.")
-    
+
     noisePower = sigPower / reqSNR
-    
+
     # Add noise
     if np.iscomplexobj(sig):
         noise = np.sqrt(noisePower / 2) * (np.random.randn(*sig.shape) + 1j * np.random.randn(*sig.shape))
     else:
         noise = np.sqrt(noisePower) * np.random.randn(*sig.shape)
-    
     y = sig + noise
     return y
 
@@ -98,7 +97,7 @@ def awgn(sig, reqSNR, *args):
 class EMG:
     """
     # motor-unit decomposition on hdEMG datasets
-    
+
     This function and the helper files are mainly a python implementation of the code accompanied with
     Hyser Dataset by Jian et. al.
     The original code and the dataset is also available at PhysioNet
@@ -133,7 +132,7 @@ class EMG:
         Whether to plot the resulting spike trains. Default is 1
     load_ICA : int, optional
         Whether to load precomputed ICA results for debugging. Default is 0
-    
+
     Returns
     -------
     motor_unit : dict
@@ -146,7 +145,7 @@ class EMG:
     """
 
     def __init__(self, data, data_mode='monopolar', sampling_frequency=2048, extension_parameter=4, max_sources=300,
-                 whiten_flag=1, inject_noise=np.inf, silhouette_threshold=0.6, output_file='sample_decomposed', 
+                 whiten_flag=1, inject_noise=np.inf, silhouette_threshold=0.6, output_file='sample_decomposed',
                  save_flag=0, plot_spikeTrain=1, load_ICA=0):
         self.data = data
         self.data_mode = data_mode
@@ -182,7 +181,7 @@ class EMG:
         array_shape : list-like
             The first element will be used to calculate the bipolar activity if the bipolar flag is
             on for the 'data_mode'.
-        
+
         Returns
         -------
         preprocessed_data : array-like
@@ -231,7 +230,8 @@ class EMG:
         """
         Run the ICA decomposition
 
-        Parameters:
+        Parameters
+        ----------
         extended_emg : numpy.ndarray
             The preprocessed extended EMG data
         M : int
@@ -324,20 +324,22 @@ class EMG:
         spike_train = np.array(spike_train)
         print("\nICA decomposition is completed")
         return source, B, spike_train, score
-    
-    def remove_motorUnit_duplicates(self, uncleaned_spkieTrain, uncleaned_source, frq):
+
+    def remove_motorUnit_duplicates(self, spike_train, source, frq=2048):
         """
         Remove the duplicate motor units
-        
-        Parameters:
+
+        Parameters
+        ----------
         uncleaned_spkieTrain : numpy.ndarray
             The uncleaned spike train
         uncleaned_source : numpy.ndarray
             The uncleaned sources from the ICA decomposition
         frq : int
             The sampling frequency of the data
-        
-        Returns:
+
+        Returns
+        -------
         spike_train : numpy.ndarray
             The spike train of the good motor units
         source : numpy.ndarray
@@ -345,13 +347,52 @@ class EMG:
         good_idx : numpy.ndarray
             The indices of the good motor units
         """
-        pass
-    
-    def spikeTrain_plot(self, spike_train, frq, silhouette_score, minScore_toPlot):
+        from scipy.spatial.distance import cdist
+
+        min_firing = 4
+        max_firing = 35
+        min_firing_interval = 1 / max_firing
+        time_stamp = np.linspace(1 / frq, spike_train.shape[0] / frq, spike_train.shape[0])
+
+        firings = spike_train.sum(axis=0)
+        lower_bound_cond = np.where(firings > min_firing * time_stamp[-1])[0]
+        upper_bound_cond = np.where(firings < max_firing * time_stamp[-1])[0]
+        plausible_firings = np.intersect1d(lower_bound_cond, upper_bound_cond)
+
+        for k in plausible_firings:
+            spike_time_diff = np.diff(time_stamp[spike_train[:, k] == 1])
+            for t in range(len(spike_time_diff)):
+                if spike_time_diff[t] < min_firing_interval:
+                    if source[t, k] < source[t + 1, k]:
+                        spike_train[t, k] = 0
+                    else:
+                        spike_train[t + 1, k] = 0
+
+        max_time_diff = 0.01
+        num_bins = 10
+        duplicate_sources = []
+        for k in plausible_firings:
+            if k not in duplicate_sources:
+                for j in np.setdiff1d(plausible_firings[plausible_firings != k], duplicate_sources):
+                    spike_times_1 = time_stamp[spike_train[:, k] == 1]
+                    spike_times_2 = time_stamp[spike_train[:, j] == 1]
+                    hist_1, _ = np.histogram(spike_times_1, bins=num_bins)
+                    hist_2, _ = np.histogram(spike_times_2, bins=num_bins)
+                    dist = cdist(hist_1[np.newaxis, :], hist_2[np.newaxis, :], metric='cosine')[0][0]
+                    if dist < max_time_diff:
+                        duplicate_sources.append(j)
+
+        good_idx = np.setdiff1d(plausible_firings, duplicate_sources)
+        spike_train = spike_train[:, good_idx]
+        source = source[:, good_idx]
+        return spike_train, source, good_idx
+
+    def spikeTrain_plot(self, spike_train, frq, sil_score, minScore_toPlot=0.7):
         """
         Plot the spike train of the good motor units
-        
-        Parameters:
+
+        Parameters
+        ----------
         spike_train : numpy.ndarray
             The spike train of the good motor units
         frq : int
@@ -361,13 +402,32 @@ class EMG:
         minScore_toPlot : float
             The minimum silhouette score of the motor units to be included in the plot
         """
-        pass
-    
+        import plotly.graph_objects as go
+        # import pandas as pd
+
+        selected_spikeTrain = spike_train[:, sil_score > minScore_toPlot]
+        order = np.argsort(np.sum(selected_spikeTrain, axis=1))[::-1]
+        bar_height = 0.2
+        fig = go.Figure()
+        for r in range(selected_spikeTrain.shape[1]):
+            signRugVal = np.abs(np.sign(selected_spikeTrain[:, order[r]]))
+            rug_x = np.where(signRugVal == 1)[0]
+            rug_y = [bar_height * r] * len(rug_x)
+            fig.add_scatter(x=rug_x, y=rug_y, mode="markers", marker=dict(size=2, color="black"))
+        fig.update_layout(
+            xaxis=dict(title="time (sec)", tickvals=np.linspace(0, selected_spikeTrain.shape[0], 10),
+                       ticktext=np.round(np.linspace(0, selected_spikeTrain.shape[0] / frq, 10))),
+            yaxis=dict(title="Motor Unit", range=[0, selected_spikeTrain.shape[1] * bar_height]),
+            height=400
+        )
+        fig.show()
+
     def run_decomposition(self):
         """
         Run the motor-unit decomposition on hdEMG datasets
-        
-        Returns:
+
+        Returns
+        -------
         None
         """
         # initialize
@@ -377,9 +437,9 @@ class EMG:
             emg_file = np.load(data)
             data = emg_file['Data'][0]
             self.frq = emg_file['SamplingFrequency']
-        
+
         max_iter = 200
-        
+
         # run the decomposition
         extended_emg, _ = self.preprocess_emg(data, self.R, self.whiten_flag, self.SNR)
         if not self.load_ICA:
@@ -394,7 +454,7 @@ class EMG:
         spike_train, source, good_idx = self.remove_motorUnit_duplicates(uncleaned_spkieTrain, uncleaned_source,
         self.frq)
         silhouette_score = score[good_idx]
-        
+
         # save the results
         self.motor_unit["spike_train"] = spike_train
         self.motor_unit["source"] = source
@@ -402,7 +462,7 @@ class EMG:
         self.motor_unit["silhouette_score"] = silhouette_score
         if self.save_flag:
             np.save(self.output_file, self.motor_unit)
-        
+
         # plot the motor units in a nice way
         minScore_toPlot = 0.9
         if self.plot_spikeTrain:
