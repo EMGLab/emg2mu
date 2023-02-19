@@ -325,6 +325,15 @@ class EMG:
         print("\nICA decomposition is completed")
         return source, B, spike_train, score
 
+    def run_ICA(self, M, max_iter, method='fastICA'):
+        if method == 'fastICA':
+            source, B, spike_train, score = self._fastICA(self.emg, M, max_iter)
+        elif method == 'torch':
+            source, B, spike_train, score = self._torch_fastICA(self.emg, M, max_iter)
+        else:
+            raise ValueError('method must be either fastICA or torch')
+        return source, B, spike_train, score
+
     def remove_motorUnit_duplicates(self, spike_train, source, frq=2048):
         """
         Remove the duplicate motor units
@@ -417,9 +426,7 @@ class EMG:
         fig.update_layout(
             xaxis=dict(title="time (sec)", tickvals=np.linspace(0, selected_spikeTrain.shape[0], 10),
                        ticktext=np.round(np.linspace(0, selected_spikeTrain.shape[0] / frq, 10))),
-            yaxis=dict(title="Motor Unit", range=[0, selected_spikeTrain.shape[1] * bar_height]),
-            height=400
-        )
+            yaxis=dict(title="Motor Unit", range=[0, selected_spikeTrain.shape[1] * bar_height]), height=400)
         fig.show()
 
     def run_decomposition(self):
