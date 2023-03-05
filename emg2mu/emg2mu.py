@@ -147,9 +147,18 @@ class EMG:
     def __init__(self, data, data_mode='monopolar', sampling_frequency=2048, extension_parameter=4, max_sources=300,
                  whiten_flag=1, inject_noise=np.inf, silhouette_threshold=0.6, output_file='sample_decomposed',
                  save_flag=0, plot_spikeTrain=1, load_ICA=0):
-        self.data = data
+        if isinstance(data, str):
+            try:
+                import scipy.io as sio
+                emg_file = sio.loadmat(data)
+                self.data = emg_file['data']
+                self.sampling_frequency = emg_file['sampling_frequency']
+            except ImportError:
+                raise ValueError("The data file must be a MAT array.")
+        else:
+            self.data = data
+            self.sampling_frequency = sampling_frequency
         self.data_mode = data_mode
-        self.sampling_frequency = sampling_frequency
         self.extension_parameter = extension_parameter
         self.max_sources = max_sources
         self.whiten_flag = whiten_flag
@@ -190,7 +199,7 @@ class EMG:
             The whitening matrix used for preprocessing
         '''
         # data can come in column or row format, but needs to become the column format where the
-        emg = self.emg
+        emg = self.data
         num_chan = min(emg.shape)  # Let's assume that we have more than 64 frames
         if num_chan != emg.shape[1]:
             emg = emg.T
@@ -327,9 +336,9 @@ class EMG:
 
     def run_ICA(self, M, max_iter, method='fastICA'):
         if method == 'fastICA':
-            source, B, spike_train, score = self._fastICA(self.emg, M, max_iter)
+            source, B, spike_train, score = self._fastICA(self._preprocessed_emg, M, max_iter)
         elif method == 'torch':
-            source, B, spike_train, score = self._torch_fastICA(self.emg, M, max_iter)
+            source, B, spike_train, score = self._torch_fastICA(self._preprocessed_emg, M, max_iter)
         else:
             raise ValueError('method must be either fastICA or torch')
         return source, B, spike_train, score
