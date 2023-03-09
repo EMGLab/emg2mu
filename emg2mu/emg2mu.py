@@ -338,16 +338,17 @@ class EMG:
         return source, B, spike_train, score
 
     def _fastICA(self, M, max_iter):
+        from scipy.signal import find_peaks
         tolerance = 10e-5
         emg = self._preprocessed.T
         num_chan, frames = emg.shape
-        B = np.zeros((num_chan, 1))
+        B = np.zeros((num_chan, M))
         spike_train = np.zeros((frames, M))
         source = np.zeros((frames, M))
-        score = np.zeros((1, M))
+        score = np.zeros(M)
         print(f"running ICA for {M} sources")
         for i in range(M):
-            print(f"running ICA for source number {i + 1}")
+            # print(f"running ICA for source number {i + 1}")
             w = []
             w.append(np.random.randn(num_chan, 1))
             w.append(np.random.randn(num_chan, 1))
@@ -360,13 +361,17 @@ class EMG:
                 else:
                     break
             source[:, i] = np.dot(w[-1].T, emg)
-            pks = np.power(source[:, i], 2)
-            loc = np.array([index for index, value in enumerate(pks) if value == np.max(pks)])
+            pow = np.power(source[:, i], 2)
+            loc, _ = find_peaks(pow)
+            pks = pow[loc]
             idx = np.array([1 if i < len(pks) / 2 else 2 for i in range(len(pks))])
-            idx_mask = idx[:, None] == idx
-            pks_masked = np.where(idx_mask, pks, np.nan)
-            mean = np.nanmean(pks_masked, axis=1)
-            std = np.nanstd(pks_masked, axis=1)
+            mean = np.zeros_like(pks)
+            std = np.zeros_like(pks)
+            for i, idx_val in enumerate([1, 2]):
+                idx_mask = (idx == idx_val)
+                pks_masked = np.where(idx_mask, pks, np.nan)
+                mean[idx_mask] = np.nanmean(pks_masked)
+                std[idx_mask] = np.nanstd(pks_masked)
             sil_score = (pks - mean) / std
             score[i] = (np.mean(sil_score[idx == 1]) + np.mean(sil_score[idx == 2])) / 2
             if sum(idx == 1) <= sum(idx == 2):
