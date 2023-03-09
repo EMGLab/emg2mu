@@ -94,6 +94,44 @@ def awgn(sig, reqSNR, *args):
     return y
 
 
+def whiten(X, method='zca'):
+    """
+    Whitens the input matrix X using specified whitening method.
+    Inputs:
+        X:      Input data matrix with data examples along the first dimension
+        method: Whitening method. Must be one of 'zca', 'zca_cor', 'pca',
+                'pca_cor', or 'cholesky'.
+    Outputs:
+        X_hat:  Whitened data matrix
+    
+    References:
+    https://gist.github.com/joelouismarino/ce239b5601fff2698895f48003f7464b
+    """
+    X = X.reshape((-1, np.prod(X.shape[1:])))
+    X_centered = X - np.mean(X, axis=0)
+    Sigma = np.dot(X_centered.T, X_centered) / X_centered.shape[0]
+    W = None
+    if method in ['zca', 'pca', 'cholesky']:
+        U, Lambda, _ = np.linalg.svd(Sigma)
+    if method == 'zca':
+        W = np.dot(U, np.dot(np.diag(1.0 / np.sqrt(Lambda + 1e-5)), U.T))
+    elif method == 'pca':
+        W = np.dot(np.diag(1.0 / np.sqrt(Lambda + 1e-5)), U.T)
+    elif method == 'cholesky':
+        W = np.linalg.cholesky(np.dot(U, np.dot(np.diag(1.0 / (Lambda + 1e-5)), U.T))).T
+    elif method in ['zca_cor', 'pca_cor']:
+        V_sqrt = np.diag(np.std(X, axis=0))
+        P = np.dot(np.dot(np.linalg.inv(V_sqrt), Sigma), np.linalg.inv(V_sqrt))
+        G, Theta, _ = np.linalg.svd(P)
+        if method == 'zca_cor':
+            W = np.dot(np.dot(G, np.dot(np.diag(1.0 / np.sqrt(Theta + 1e-5)), G.T)), np.linalg.inv(V_sqrt))
+        elif method == 'pca_cor':
+            W = np.dot(np.dot(np.diag(1.0 / np.sqrt(Theta + 1e-5)), G.T), np.linalg.inv(V_sqrt))
+    else:
+        raise Exception('Whitening method not found.')
+    return np.dot(X_centered, W.T)
+
+
 class EMG:
     """
     # motor-unit decomposition on hdEMG datasets
@@ -119,7 +157,7 @@ class EMG:
     whiten_flag : int, optional
         Whether to whiten the data prior to the ICA. Default = 1
     inject_noise : float, optional
-        Adding white noise to the EMG mixutre. Uses Communication Toolbox AWGN function.
+        Adding white noise to the EMG mixutre. Uses the equivalent of the Communication Toolbox AWGN function.
         Default = Inf for not injecting any artificial noise.
     silhouette_threshold : float, optional
         The silhouette threshold to detect the good motor units. Default = 0.6
@@ -146,13 +184,13 @@ class EMG:
 
     def __init__(self, data, data_mode='monopolar', sampling_frequency=2048, extension_parameter=4, max_sources=300,
                  whiten_flag=1, inject_noise=np.inf, silhouette_threshold=0.6, output_file='sample_decomposed',
-                 save_flag=0, plot_spikeTrain=1, load_ICA=0):
+                 max_ica_iter=100, save_flag=0, plot_spikeTrain=1, load_ICA=0):
         if isinstance(data, str):
             try:
                 import scipy.io as sio
                 emg_file = sio.loadmat(data)
-                self.data = emg_file['data']
-                self.sampling_frequency = emg_file['sampling_frequency']
+                self.data = emg_file['Data'][0, 0]
+                self.sampling_frequency = emg_file['SamplingFrequency']
             except ImportError:
                 raise ValueError("The data file must be a MAT array.")
         else:
@@ -165,12 +203,13 @@ class EMG:
         self.inject_noise = inject_noise
         self.silhouette_threshold = silhouette_threshold
         self.output_file = output_file
+        self.max_ica_iter = max_ica_iter
         self.save_flag = save_flag
         self.plot_spikeTrain = plot_spikeTrain
         self.load_ICA = load_ICA
         self.motor_unit = {}
 
-    def preprocess_emg(self, data_mode='monopolar', whiten_flag=True, R=4, SNR=np.inf, array_shape=[8, 8]):
+    def preprocess(self, data_mode='monopolar', whiten_flag=True, R=4, SNR=np.inf, array_shape=[8, 8]):
         '''
         Prepares the emg array for decomposition.
 
@@ -183,7 +222,7 @@ class EMG:
         whiten_flag : bool
             Whether to whiten the data prior to the ICA. Default = 1
         SNR : float
-            Adding white noise to the EMG mixture. Uses Communication Toolbox AWGN function.
+            Adding white noise to the EMG mixture. Uses the equivalnet of Matlab's Communication Toolbox AWGN function.
             Default = Inf for not injecting any artificial noise.
         R : int
             The number of times to repeat the data blocks, see the Hyser paper for more detail. Default = 4
@@ -206,7 +245,7 @@ class EMG:
 
         # Add white noise
         if not np.isinf(SNR):
-            emg = self.awgn(emg, SNR, 'dB')
+            emg = awgn(emg, SNR, 'dB')
 
         # create a bipolar setting from the monopolar data
         if data_mode == "bipolar":
@@ -224,18 +263,19 @@ class EMG:
                 # small delay, R/freq, which with R=64, delay = 64/2048= 31ms.
                 # This addition reinforces finding MUAPs, despite having
                 # duplicates. Later on, the duplicates will be removed.
-                extended_emg[i + 1:, emg.shape[1] * i: emg.shape[1] * (i + 1)] = emg[:-i, :]
+                i += 1
+                extended_emg[i:, emg.shape[1] * i: emg.shape[1] * (i + 1)] = emg[:-i, :]
 
         if whiten_flag:
-            whitened_data, _, _, W = self.whiten(extended_emg)
+            whitened_data = whiten(extended_emg)
             preprocessed_emg = whitened_data
         else:
             preprocessed_emg = extended_emg
 
-        self._preprocessed_emg = preprocessed_emg
-        return self
+        self._preprocessed = preprocessed_emg
+        # return self
 
-    def _torch_fastICA(emg, M, max_iter):
+    def _torch_fastICA(self, M, max_iter):
         """
         Run the ICA decomposition
 
@@ -258,11 +298,12 @@ class EMG:
             The score of the sources
         """
         import torch
-        device = torch.device("mps" if torch.has_mps() else "gpu")
+        device = torch.device("mps" if torch.has_mps else "gpu")
         if not device:
             device = torch.device("cpu")
-        tolerance = 10e-4
-        emg = emg.T
+        tolerance = 10e-5
+        emg = self._preprocessed.T
+        emg = torch.from_numpy(np.float32(emg)).to(device)
         num_chan, frames = emg.shape
         B = torch.zeros(num_chan, M, device=device)
         spike_train = torch.zeros(frames, M, device=device)
@@ -271,8 +312,8 @@ class EMG:
         print(f'running ICA for {M} sources')
         for i in range(M):
             w = torch.empty(num_chan, 2, device=device).normal_(mean=0, std=1)
-            for n in range(2, max_iter):
-                dot_product = torch.matmul(w[:, n - 1].unsqueeze(1), emg)
+            for n in range(1, max_iter):
+                dot_product = torch.matmul(w[:, n - 1].unsqueeze(1).T, emg)
                 A = 2 * torch.mean(dot_product)
                 w_new = emg * dot_product.pow(2) - A * w[:, n - 1].unsqueeze(1)
                 w_new = w_new - torch.matmul(torch.matmul(B[:, i].unsqueeze(0), B[:, i].unsqueeze(1)), w_new)
@@ -296,19 +337,21 @@ class EMG:
         print('\nICA decomposition is completed')
         return source, B, spike_train, score
 
-    def _fastICA(emg, M, max_iter):
-        tolerance = 10e-4
+    def _fastICA(self, M, max_iter):
+        tolerance = 10e-5
+        emg = self._preprocessed.T
         num_chan, frames = emg.shape
         B = np.zeros((num_chan, 1))
         spike_train = np.zeros((frames, M))
         source = np.zeros((frames, M))
-        score = np.zeros(1, M)
+        score = np.zeros((1, M))
         print(f"running ICA for {M} sources")
         for i in range(M):
+            print(f"running ICA for source number {i + 1}")
             w = []
             w.append(np.random.randn(num_chan, 1))
             w.append(np.random.randn(num_chan, 1))
-            for n in range(2, max_iter):
+            for n in range(1, max_iter):
                 if abs(np.dot(w[n].T, w[n - 1]) - 1) > tolerance:
                     A = np.mean(2 * np.dot(w[n].T, emg))
                     w.append(emg @ ((np.dot(w[n].T, emg).T) ** 2) - A * w[n])
@@ -320,8 +363,11 @@ class EMG:
             pks = np.power(source[:, i], 2)
             loc = np.array([index for index, value in enumerate(pks) if value == np.max(pks)])
             idx = np.array([1 if i < len(pks) / 2 else 2 for i in range(len(pks))])
-            sil_score = np.array([(pks[i] - np.mean([pks[j] for j in range(len(pks)) if idx[j] ==
-                idx[i]])) / np.std([pks[j] for j in range(len(pks)) if idx[j] == idx[i]]) for i in range(len(pks))])
+            idx_mask = idx[:, None] == idx
+            pks_masked = np.where(idx_mask, pks, np.nan)
+            mean = np.nanmean(pks_masked, axis=1)
+            std = np.nanstd(pks_masked, axis=1)
+            sil_score = (pks - mean) / std
             score[i] = (np.mean(sil_score[idx == 1]) + np.mean(sil_score[idx == 2])) / 2
             if sum(idx == 1) <= sum(idx == 2):
                 spike_loc = loc[idx == 1]
@@ -334,11 +380,13 @@ class EMG:
         print("\nICA decomposition is completed")
         return source, B, spike_train, score
 
-    def run_ICA(self, M, max_iter, method='fastICA'):
+    def run_ICA(self, method='fastICA'):
+        max_iter = self.max_ica_iter
+        max_sources = self.max_sources
         if method == 'fastICA':
-            source, B, spike_train, score = self._fastICA(self._preprocessed_emg, M, max_iter)
+            source, B, spike_train, score = self._fastICA(max_sources, max_iter)
         elif method == 'torch':
-            source, B, spike_train, score = self._torch_fastICA(self._preprocessed_emg, M, max_iter)
+            source, B, spike_train, score = self._torch_fastICA(max_sources, max_iter)
         else:
             raise ValueError('method must be either fastICA or torch')
         return source, B, spike_train, score
@@ -457,7 +505,7 @@ class EMG:
         max_iter = 200
 
         # run the decomposition
-        extended_emg, _ = self.preprocess_emg(data, self.R, self.whiten_flag, self.SNR)
+        extended_emg, _ = self.preprocess(data, self.R, self.whiten_flag, self.SNR)
         if not self.load_ICA:
             uncleaned_source, B, uncleaned_spkieTrain, score = self.run_ICA(extended_emg, self.M, max_iter)
         else:
@@ -483,3 +531,4 @@ class EMG:
         minScore_toPlot = 0.9
         if self.plot_spikeTrain:
             self.plot_spikeTrain(spike_train, self.frq, silhouette_score, minScore_toPlot)
+        return self

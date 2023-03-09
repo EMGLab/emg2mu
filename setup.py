@@ -19,7 +19,8 @@ SETUP_REQUIRES += ['wheel'] if 'bdist_wheel' in sys.argv else []
 #             maintainer='Seyed Yahya Shirazi',
 #             maintainer_email='shirazi@ieee.org',
 #             description='Decompose hd-EMG signals into motor units',
-#             long_description='This packege uses a suite of blind source separation techniques to decompose hd-EMG signals into motor units.'
+#             long_description='This packege uses a suite of blind source separation techniques to decompose hd-EMG
+#                               signals into motor units.'
 #             url='github.com/neuromechanist/emg2mu',
 #             download_url='pypi.org/project/emg2mu',
 #             license='MIT',
@@ -37,4 +38,4 @@ SETUP_REQUIRES += ['wheel'] if 'bdist_wheel' in sys.argv else []
 
 
 if __name__ == '__main__':
-    setup(**opts)
+    setup()  # **opts
