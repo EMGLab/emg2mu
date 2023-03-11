@@ -132,6 +132,49 @@ def whiten(X, method='zca'):
     return np.dot(X_centered, W.T)
 
 
+def get_silhouette_score(feats, labels):
+    import torch
+    device, dtype = feats.device, feats.dtype
+    unique_labels = np.unique(labels)
+    num_samples = len(feats)
+    if not (1 < len(unique_labels) < num_samples):
+        raise ValueError("num unique labels must be > 1 and < num samples")
+    scores = []
+    for L in unique_labels:
+        curr_cluster = feats[labels == L]
+        num_elements = len(curr_cluster)
+        if num_elements > 1:
+            intra_cluster_dists = torch.cdist(curr_cluster, curr_cluster)
+            mean_intra_dists = torch.sum(intra_cluster_dists, dim=1) / (
+                num_elements - 1
+            )  # minus 1 to exclude self distance
+            dists_to_other_clusters = []
+            for otherL in unique_labels:
+                if otherL != L:
+                    other_cluster = feats[labels == otherL]
+                    inter_cluster_dists = torch.cdist(curr_cluster, other_cluster)
+                    mean_inter_dists = torch.sum(inter_cluster_dists, dim=1) / (
+                        len(other_cluster)
+                    )
+                    dists_to_other_clusters.append(mean_inter_dists)
+            dists_to_other_clusters = torch.stack(dists_to_other_clusters, dim=1)
+            min_dists, _ = torch.min(dists_to_other_clusters, dim=1)
+            curr_scores = (min_dists - mean_intra_dists) / (
+                torch.maximum(min_dists, mean_intra_dists)
+            )
+        else:
+            curr_scores = torch.tensor([0], device=device, dtype=dtype)
+
+        scores.append(curr_scores)
+
+    scores = torch.cat(scores, dim=0)
+    if len(scores) != num_samples:
+        raise ValueError(
+            f"scores (shape {scores.shape}) should have same length as feats (shape {feats.shape})"
+        )
+    return torch.mean(scores).item()
+
+
 class EMG:
     """
     # motor-unit decomposition on hdEMG datasets
@@ -275,70 +318,117 @@ class EMG:
         self._preprocessed = preprocessed_emg
         # return self
 
-    def _torch_fastICA(self, M, max_iter):
-        """
-        Run the ICA decomposition
+    # def _torch_fastICA(self, M, max_iter):
+    #     """
+    #     Run the ICA decomposition
 
-        Parameters
-        ----------
-        extended_emg : numpy.ndarray
-            The preprocessed extended EMG data
-        M : int
-            Maximum number of sources being decomposed by (FAST) ICA
-        max_iter : int
-            Maximum iterations for the (FAST) ICA decompsition
-                Returns:
-        uncleaned_source : numpy.ndarray
-            The uncleaned sources from the ICA decomposition
-        B : numpy.ndarray
-            The unmixing matrix
-        uncleaned_spkieTrain : numpy.ndarray
-            The uncleaned spike train
-        score : numpy.ndarray
-            The score of the sources
-        """
+    #     Parameters
+    #     ----------
+    #     extended_emg : numpy.ndarray
+    #         The preprocessed extended EMG data
+    #     M : int
+    #         Maximum number of sources being decomposed by (FAST) ICA
+    #     max_iter : int
+    #         Maximum iterations for the (FAST) ICA decompsition
+    #             Returns:
+    #     uncleaned_source : numpy.ndarray
+    #         The uncleaned sources from the ICA decomposition
+    #     B : numpy.ndarray
+    #         The unmixing matrix
+    #     uncleaned_spkieTrain : numpy.ndarray
+    #         The uncleaned spike train
+    #     score : numpy.ndarray
+    #         The score of the sources
+    #     """
+    #     import torch
+    #     device = torch.device("mps" if torch.has_mps else "gpu")
+    #     if not device:
+    #         device = torch.device("cpu")
+    #     tolerance = 10e-5
+    #     emg = self._preprocessed.T
+    #     emg = torch.from_numpy(np.float32(emg)).to(device)
+    #     num_chan, frames = emg.shape
+    #     B = torch.zeros(num_chan, M, device=device)
+    #     spike_train = torch.zeros(frames, M, device=device)
+    #     source = torch.zeros(frames, M, device=device)
+    #     score = torch.zeros(1, M, device=device)
+    #     print(f'running ICA for {M} sources')
+    #     for i in range(M):
+    #         w = torch.empty(num_chan, 2, device=device).normal_(mean=0, std=1)
+    #         for n in range(1, max_iter):
+    #             dot_product = torch.matmul(w[:, n - 1].unsqueeze(1).T, emg)
+    #             A = 2 * torch.mean(dot_product)
+    #             w_new = emg * dot_product.pow(2) - A * w[:, n - 1].unsqueeze(1)
+    #             w_new = w_new - torch.matmul(torch.matmul(B[:, i].unsqueeze(0), B[:, i].unsqueeze(1)), w_new)
+    #             w_new = w_new / w_new.norm()
+    #             if (w[:, n - 1].unsqueeze(1).matmul(w_new) - 1).abs() <= tolerance:
+    #                 break
+    #             w = torch.cat((w, w_new), dim=1)
+    #         source[:, i] = torch.matmul(w[:, -1].unsqueeze(1), emg).squeeze()
+    #         pks, loc = torch.max(source[:, i].pow(2), dim=0)
+    #         idx, _ = torch.kmeans(pks, 2, max_iter=1)
+    #         sil_score = get_silhouette_score(pks.rehape(-1, 1), idx)
+    #         score[0, i] = (sil_score[idx.numpy() == 0].mean() + sil_score[idx.numpy() == 1].mean()) / 2
+    #         if (idx == 0).sum() <= (idx == 1).sum():
+    #             spike_loc = loc[idx == 0]
+    #         else:
+    #             spike_loc = loc[idx == 1]
+    #         spike_train[spike_loc, i] = 1
+    #         B[:, i] = w[:, -1]
+    #         print('.', end='')
+    #     spike_train = spike_train.to_sparse()
+    #     print('\nICA decomposition is completed')
+    #     return source, B, spike_train, score
+
+    def _torch_fastICA(self, M, max_iter, device='mps'):
         import torch
-        device = torch.device("mps" if torch.has_mps else "gpu")
-        if not device:
-            device = torch.device("cpu")
+        import torch.nn.functional as F
+        from scipy.signal import find_peaks
+        from sklearn.cluster import KMeans
         tolerance = 10e-5
-        emg = self._preprocessed.T
-        emg = torch.from_numpy(np.float32(emg)).to(device)
+        emg = torch.tensor(self._preprocessed.T, dtype=torch.float32, device=device)
         num_chan, frames = emg.shape
-        B = torch.zeros(num_chan, M, device=device)
-        spike_train = torch.zeros(frames, M, device=device)
-        source = torch.zeros(frames, M, device=device)
-        score = torch.zeros(1, M, device=device)
-        print(f'running ICA for {M} sources')
+        B = torch.zeros((num_chan, M), dtype=torch.float32, device=device)
+        spike_train = torch.zeros((frames, M), dtype=torch.float32, device=device)
+        source = torch.zeros((frames, M), dtype=torch.float32, device=device)
+        score = torch.zeros(M, dtype=torch.float32, device=device)
+        print(f"running ICA for {M} sources")
         for i in range(M):
-            w = torch.empty(num_chan, 2, device=device).normal_(mean=0, std=1)
+            w = []
+            w.append(torch.randn(num_chan, 1, device=device, dtype=torch.float32))
+            w.append(torch.randn(num_chan, 1, device=device, dtype=torch.float32))
             for n in range(1, max_iter):
-                dot_product = torch.matmul(w[:, n - 1].unsqueeze(1).T, emg)
-                A = 2 * torch.mean(dot_product)
-                w_new = emg * dot_product.pow(2) - A * w[:, n - 1].unsqueeze(1)
-                w_new = w_new - torch.matmul(torch.matmul(B[:, i].unsqueeze(0), B[:, i].unsqueeze(1)), w_new)
-                w_new = w_new / w_new.norm()
-                if (w[:, n - 1].unsqueeze(1).matmul(w_new) - 1).abs() <= tolerance:
+                if abs(torch.matmul(w[n].T, w[n - 1]) - 1) > tolerance:
+                    A = torch.mean(2 * torch.matmul(w[n].T, emg))
+                    w.append(emg @ ((torch.matmul(w[n].T, emg).T) ** 2) - A * w[n])
+                    w[-1] = w[-1] - torch.matmul(torch.matmul(B, B.T), w[-1])
+                    w[-1] = F.normalize(w[-1], p=2, dim=0)
+                else:
                     break
-                w = torch.cat((w, w_new), dim=1)
-            source[:, i] = torch.matmul(w[:, -1].unsqueeze(1), emg).squeeze()
-            pks, loc = torch.max(source[:, i].pow(2), dim=0)
-            idx, _ = torch.kmeans(pks, 2, max_iter=1)
-            sil_score = np.silhouette_samples(pks.numpy(), idx.numpy())
-            score[0, i] = (sil_score[idx.numpy() == 0].mean() + sil_score[idx.numpy() == 1].mean()) / 2
-            if (idx == 0).sum() <= (idx == 1).sum():
-                spike_loc = loc[idx == 0]
-            else:
+            source[:, i] = torch.matmul(w[-1].T, emg)
+            pow = torch.pow(source[:, i], 2)
+            loc, _ = find_peaks(pow.cpu().numpy())
+            pks = pow[loc].cpu().numpy()
+            kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
+            idx = kmeans.labels_
+            # score[i] = get_silhouette_score(torch.tensor(pks.reshape(-1, 1), dtype=torch.float32, device=device),
+                                            # idx)
+            if sum(idx == 1) <= sum(idx == 0):
                 spike_loc = loc[idx == 1]
+            else:
+                spike_loc = loc[idx == 0]
             spike_train[spike_loc, i] = 1
-            B[:, i] = w[:, -1]
-            print('.', end='')
-        spike_train = spike_train.to_sparse()
-        print('\nICA decomposition is completed')
-        return source, B, spike_train, score
+            B[:, i] = w[-1].flatten()
+            print(".", end="")
+            if i > 1 and (i - 1) % 50 == 0:
+                print('\n')
+        spike_train = spike_train.cpu().numpy()
+        print("\nICA decomposition is completed")
+        return source.cpu().numpy(), B.cpu().numpy(), spike_train  # , score.cpu().numpy()
 
     def _fastICA(self, M, max_iter):
         from scipy.signal import find_peaks
+        from sklearn.cluster import KMeans
         tolerance = 10e-5
         emg = self._preprocessed.T
         num_chan, frames = emg.shape
@@ -364,16 +454,9 @@ class EMG:
             pow = np.power(source[:, i], 2)
             loc, _ = find_peaks(pow)
             pks = pow[loc]
-            idx = np.array([1 if i < len(pks) / 2 else 2 for i in range(len(pks))])
-            mean = np.zeros_like(pks)
-            std = np.zeros_like(pks)
-            for i, idx_val in enumerate([1, 2]):
-                idx_mask = (idx == idx_val)
-                pks_masked = np.where(idx_mask, pks, np.nan)
-                mean[idx_mask] = np.nanmean(pks_masked)
-                std[idx_mask] = np.nanstd(pks_masked)
-            sil_score = (pks - mean) / std
-            score[i] = (np.mean(sil_score[idx == 1]) + np.mean(sil_score[idx == 2])) / 2
+            kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
+            idx = kmeans.labels_
+            # score[i] = silhouette_score(pks.reshape(-1, 1), idx)
             if sum(idx == 1) <= sum(idx == 2):
                 spike_loc = loc[idx == 1]
             else:
@@ -381,6 +464,8 @@ class EMG:
             spike_train[spike_loc, i] = 1
             B[:, i] = w[-1].flatten()
             print(".", end="")
+            if i > 1 and (i - 1) % 50 == 0:
+                print("\n")
         spike_train = np.array(spike_train)
         print("\nICA decomposition is completed")
         return source, B, spike_train, score
@@ -394,7 +479,7 @@ class EMG:
             source, B, spike_train, score = self._torch_fastICA(max_sources, max_iter)
         else:
             raise ValueError('method must be either fastICA or torch')
-        return source, B, spike_train, score
+        return source, B, spike_train
 
     def remove_motorUnit_duplicates(self, spike_train, source, frq=2048):
         """
