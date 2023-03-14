@@ -132,10 +132,35 @@ def whiten(X, method='zca'):
     return np.dot(X_centered, W.T)
 
 
-def get_silhouette_score(feats, labels):
+def silhouette_score_torch(feats, labels):
+    """
+    WARNING: DOES NOT WORK WITH M1 MACS
+
+    Compute the mean Silhouette Coefficient of all samples.
+    The Silhouette Coefficient is calculated using the mean intra-cluster distance (a)
+    and the mean nearest-cluster distance (b) for each sample. The Silhouette Coefficient
+    for a sample is (b - a) / max(a, b). To clarify, b is the distance between a sample
+    and the nearest cluster that the sample is not a part of.
+    This function returns the mean Silhouette Coefficient over all samples.
+    Note that this implementation is not optimized for speed.
+    
+    Parameters
+    ----------
+    feats : torch.Tensor
+        A 2D tensor of size (num_samples, num_features) containing the features of
+        the samples.
+    labels : torch.Tensor
+        A 1D tensor of size (num_samples,) containing the labels of the samples.
+    
+    Returns
+    -------
+    silhouette_score : float
+        The mean Silhouette Coefficient of all samples.
+    """
+
     import torch
     device, dtype = feats.device, feats.dtype
-    unique_labels = np.unique(labels)
+    unique_labels = torch.unique(labels)  # not yet supported in pytorch for mps
     num_samples = len(feats)
     if not (1 < len(unique_labels) < num_samples):
         raise ValueError("num unique labels must be > 1 and < num samples")
@@ -318,69 +343,31 @@ class EMG:
         self._preprocessed = preprocessed_emg
         # return self
 
-    # def _torch_fastICA(self, M, max_iter):
-    #     """
-    #     Run the ICA decomposition
-
-    #     Parameters
-    #     ----------
-    #     extended_emg : numpy.ndarray
-    #         The preprocessed extended EMG data
-    #     M : int
-    #         Maximum number of sources being decomposed by (FAST) ICA
-    #     max_iter : int
-    #         Maximum iterations for the (FAST) ICA decompsition
-    #             Returns:
-    #     uncleaned_source : numpy.ndarray
-    #         The uncleaned sources from the ICA decomposition
-    #     B : numpy.ndarray
-    #         The unmixing matrix
-    #     uncleaned_spkieTrain : numpy.ndarray
-    #         The uncleaned spike train
-    #     score : numpy.ndarray
-    #         The score of the sources
-    #     """
-    #     import torch
-    #     device = torch.device("mps" if torch.has_mps else "gpu")
-    #     if not device:
-    #         device = torch.device("cpu")
-    #     tolerance = 10e-5
-    #     emg = self._preprocessed.T
-    #     emg = torch.from_numpy(np.float32(emg)).to(device)
-    #     num_chan, frames = emg.shape
-    #     B = torch.zeros(num_chan, M, device=device)
-    #     spike_train = torch.zeros(frames, M, device=device)
-    #     source = torch.zeros(frames, M, device=device)
-    #     score = torch.zeros(1, M, device=device)
-    #     print(f'running ICA for {M} sources')
-    #     for i in range(M):
-    #         w = torch.empty(num_chan, 2, device=device).normal_(mean=0, std=1)
-    #         for n in range(1, max_iter):
-    #             dot_product = torch.matmul(w[:, n - 1].unsqueeze(1).T, emg)
-    #             A = 2 * torch.mean(dot_product)
-    #             w_new = emg * dot_product.pow(2) - A * w[:, n - 1].unsqueeze(1)
-    #             w_new = w_new - torch.matmul(torch.matmul(B[:, i].unsqueeze(0), B[:, i].unsqueeze(1)), w_new)
-    #             w_new = w_new / w_new.norm()
-    #             if (w[:, n - 1].unsqueeze(1).matmul(w_new) - 1).abs() <= tolerance:
-    #                 break
-    #             w = torch.cat((w, w_new), dim=1)
-    #         source[:, i] = torch.matmul(w[:, -1].unsqueeze(1), emg).squeeze()
-    #         pks, loc = torch.max(source[:, i].pow(2), dim=0)
-    #         idx, _ = torch.kmeans(pks, 2, max_iter=1)
-    #         sil_score = get_silhouette_score(pks.rehape(-1, 1), idx)
-    #         score[0, i] = (sil_score[idx.numpy() == 0].mean() + sil_score[idx.numpy() == 1].mean()) / 2
-    #         if (idx == 0).sum() <= (idx == 1).sum():
-    #             spike_loc = loc[idx == 0]
-    #         else:
-    #             spike_loc = loc[idx == 1]
-    #         spike_train[spike_loc, i] = 1
-    #         B[:, i] = w[:, -1]
-    #         print('.', end='')
-    #     spike_train = spike_train.to_sparse()
-    #     print('\nICA decomposition is completed')
-    #     return source, B, spike_train, score
 
     def _torch_fastICA(self, M, max_iter, device='mps'):
+        """
+        Run the ICA decomposition
+
+        Parameters
+        ----------
+        extended_emg : numpy.ndarray
+            The preprocessed extended EMG data
+        M : int
+            Maximum number of sources being decomposed by (FAST) ICA
+        max_iter : int
+            Maximum iterations for the (FAST) ICA decompsition
+        
+        Returns
+        -------
+        uncleaned_source : numpy.ndarray
+            The uncleaned sources from the ICA decomposition
+        B : numpy.ndarray
+            The unmixing matrix
+        uncleaned_spkieTrain : numpy.ndarray
+            The uncleaned spike train
+        score : numpy.ndarray
+            The score of the sources
+        """
         import torch
         import torch.nn.functional as F
         from scipy.signal import find_peaks
