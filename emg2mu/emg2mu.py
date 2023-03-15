@@ -343,10 +343,9 @@ class EMG:
         self._preprocessed = preprocessed_emg
         # return self
 
-
-    def _torch_fastICA(self, M, max_iter, device='mps'):
+    def _torch_fastICA_(self, extended_emg, M, max_iter, device='mps'):
         """
-        Run the ICA decomposition
+        Run the ICA decomposition using torch
 
         Parameters
         ----------
@@ -373,12 +372,12 @@ class EMG:
         from scipy.signal import find_peaks
         from sklearn.cluster import KMeans
         tolerance = 10e-5
-        emg = torch.tensor(self._preprocessed.T, dtype=torch.float32, device=device)
+        emg = torch.tensor(extended_emg.T, dtype=torch.float32, device=device)
         num_chan, frames = emg.shape
         B = torch.zeros((num_chan, M), dtype=torch.float32, device=device)
         spike_train = torch.zeros((frames, M), dtype=torch.float32, device=device)
         source = torch.zeros((frames, M), dtype=torch.float32, device=device)
-        score = torch.zeros(M, dtype=torch.float32, device=device)
+        # score = torch.zeros(M, dtype=torch.float32, device=device)
         print(f"running ICA for {M} sources")
         for i in range(M):
             w = []
@@ -398,8 +397,8 @@ class EMG:
             pks = pow[loc].cpu().numpy()
             kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
             idx = kmeans.labels_
-            # score[i] = get_silhouette_score(torch.tensor(pks.reshape(-1, 1), dtype=torch.float32, device=device),
-                                            # idx)
+            # score[i] = silhouette_score_torch(torch.tensor(pks.reshape(-1, 1),
+            #                                              dtype=torch.float32, device=device),idx)
             if sum(idx == 1) <= sum(idx == 0):
                 spike_loc = loc[idx == 1]
             else:
@@ -411,18 +410,38 @@ class EMG:
                 print('\n')
         spike_train = spike_train.cpu().numpy()
         print("\nICA decomposition is completed")
-        return source.cpu().numpy(), B.cpu().numpy(), spike_train  # , score.cpu().numpy()
+        return source.cpu().numpy(), B.cpu().numpy(), spike_train
 
-    def _fastICA(self, M, max_iter):
+    def _fastICA_(self, extended_emg, M, max_iter):
+        """
+        Run the ICA decomposition
+
+        Parameters
+        ----------
+        extended_emg : numpy.ndarray
+            The preprocessed extended EMG data
+        M : int
+            Maximum number of sources being decomposed by (FAST) ICA
+        max_iter : int
+            Maximum iterations for the (FAST) ICA decompsition
+
+        Returns
+        -------
+        uncleaned_source : numpy.ndarray
+            The uncleaned sources from the ICA decomposition
+        B : numpy.ndarray
+            The unmixing matrix
+        uncleaned_spkieTrain : numpy.ndarray
+            The uncleaned spike train
+        """
         from scipy.signal import find_peaks
         from sklearn.cluster import KMeans
         tolerance = 10e-5
-        emg = self._preprocessed.T
+        emg = extended_emg.T
         num_chan, frames = emg.shape
         B = np.zeros((num_chan, M))
         spike_train = np.zeros((frames, M))
         source = np.zeros((frames, M))
-        score = np.zeros(M)
         print(f"running ICA for {M} sources")
         for i in range(M):
             # print(f"running ICA for source number {i + 1}")
@@ -455,20 +474,25 @@ class EMG:
                 print("\n")
         spike_train = np.array(spike_train)
         print("\nICA decomposition is completed")
-        return source, B, spike_train, score
+        return source, B, spike_train
 
     def run_ICA(self, method='fastICA'):
+        """
+        Run the ICA algorithm
+        """
         max_iter = self.max_ica_iter
         max_sources = self.max_sources
         if method == 'fastICA':
-            source, B, spike_train, score = self._fastICA(max_sources, max_iter)
+            source, B, spike_train = self._fastICA_(self._preprocessed, max_sources, max_iter)
         elif method == 'torch':
-            source, B, spike_train, score = self._torch_fastICA(max_sources, max_iter)
+            source, B, spike_train = self._torch_fastICA_(self._preprocessed, max_sources, max_iter)
         else:
             raise ValueError('method must be either fastICA or torch')
-        return source, B, spike_train
+        self._raw_source = source
+        self._raw_spike_train = spike_train
+        self._raw_B = B
 
-    def remove_motorUnit_duplicates(self, spike_train, source, frq=2048):
+    def remove_motorUnit_duplicates(self, frq=2048):
         """
         Remove the duplicate motor units
 
@@ -492,6 +516,9 @@ class EMG:
         """
         from scipy.spatial.distance import cdist
 
+        spike_train = self._raw_spike_train
+        source = self._raw_source
+        
         min_firing = 4
         max_firing = 35
         min_firing_interval = 1 / max_firing
@@ -528,7 +555,47 @@ class EMG:
         good_idx = np.setdiff1d(plausible_firings, duplicate_sources)
         spike_train = spike_train[:, good_idx]
         source = source[:, good_idx]
-        return spike_train, source, good_idx
+        self.source = source
+        self.spike_train = spike_train
+        self._good_idx = good_idx
+    
+    def _compute_score_(self, spike_train, source, frq=2048):
+        """
+        Compute the silhouette score of the motor units
+
+        Parameters
+        ----------
+        spike_train : numpy.ndarray
+            The spike train of the good motor units
+        source : numpy.ndarray
+            The sources of the good motor units
+        frq : int
+            The sampling frequency of the data
+
+        Returns
+        -------
+        sil_score : numpy.ndarray
+            The silhouette score of the good motor units
+        """
+        from sklearn.metrics import silhouette_score
+        from sklearn.cluster import KMeans
+        from scipy.signal import find_peaks
+
+        sil_score = np.zeros(spike_train.shape[1])
+        for i in range(spike_train.shape[1]):
+            pow = np.power(source[:, i], 2)
+            loc, _ = find_peaks(pow)
+            pks = pow[loc]
+            kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
+            idx = kmeans.labels_
+            sil_score[i] = silhouette_score(pks.reshape(-1, 1), idx)
+        return sil_score
+    
+    def compute_score(self):
+        """
+        Compute the silhouette score of the motor units
+        """
+        self.sil_score = self._compute_score_(self.spike_train, self.source)
 
     def spikeTrain_plot(self, spike_train, frq, sil_score, minScore_toPlot=0.7):
         """
