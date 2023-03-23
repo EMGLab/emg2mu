@@ -641,6 +641,28 @@ class EMG:
         """
         self.sil_score = self._compute_score_(self.spike_train, self.source)
 
+    def save_score(self, path):
+        """
+        Save the silhouette score of the motor units
+
+        Parameters
+        ----------
+        path : str
+            The path to save the silhouette score
+        """
+        np.save(path, self.sil_score)
+
+    def load_score(self, path):
+        """
+        Load the silhouette score of the motor units
+
+        Parameters
+        ----------
+        path : str
+            The path to load the silhouette score
+        """
+        self.sil_score = np.load(path)
+
     def spikeTrain_plot(self, minScore_toPlot=0.7):
         """
         Plot the spike train of the good motor units
