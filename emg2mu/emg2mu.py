@@ -494,6 +494,9 @@ class EMG:
         _raw_B : numpy.ndarray
             The unmixing matrix
         """
+        if self._load_ICA:
+            self._load_ICA_(self.ICA_path)
+            return
         max_iter = self.max_ica_iter
         max_sources = self.max_sources
         if method == 'fastICA':
@@ -505,8 +508,10 @@ class EMG:
         self._raw_source = source
         self._raw_spike_train = spike_train
         self._raw_B = B
+        if self._save_ICA:
+            self._save_ICA_(self.ICA_path)
 
-    def save_ICA(self, path):
+    def _save_ICA_(self, path):
         """
         Save the ICA results
 
@@ -517,7 +522,7 @@ class EMG:
         """
         np.savez(path, source=self._raw_source, spike_train=self._raw_spike_train, B=self._raw_B)
 
-    def load_ICA(self, path):
+    def _load_ICA_(self, path):
         """
         Load the ICA results
 
@@ -639,9 +644,14 @@ class EMG:
         sil_score : numpy.ndarray
             The silhouette score of the good motor units
         """
-        self.sil_score = self._compute_score_(self.spike_train, self.source)
+        if self._load_score:
+            self._load_score_(self.score_path)
+        else:
+            self.sil_score = self._compute_score_(self.spike_train, self.source)
+            if self._save_score:
+                self._save_score_(self.score_path)
 
-    def save_score(self, path):
+    def _save_score_(self, path):
         """
         Save the silhouette score of the motor units
 
@@ -652,7 +662,7 @@ class EMG:
         """
         np.save(path, self.sil_score)
 
-    def load_score(self, path):
+    def _load_score_(self, path):
         """
         Load the silhouette score of the motor units
 
