@@ -463,10 +463,10 @@ class EMG:
             kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
             idx = kmeans.labels_
             # score[i] = silhouette_score(pks.reshape(-1, 1), idx)
-            if sum(idx == 1) <= sum(idx == 2):
-                spike_loc = loc[idx == 1]
+            if sum(idx == 0) <= sum(idx == 1):
+                spike_loc = loc[idx == 0]
             else:
-                spike_loc = loc[idx == 2]
+                spike_loc = loc[idx == 1]
             spike_train[spike_loc, i] = 1
             B[:, i] = w[-1].flatten()
             print(".", end="")
@@ -479,6 +479,20 @@ class EMG:
     def run_ICA(self, method='fastICA'):
         """
         Run the ICA algorithm
+
+        Parameters
+        ----------
+        method : str
+            The ICA algorithm to be used. Either 'fastICA' or 'torch'
+
+        Attributes
+        ----------
+        _raw_source : numpy.ndarray
+            The uncleaned sources from the ICA decomposition
+        _raw_spike_train : numpy.ndarray
+            The uncleaned spike train
+        _raw_B : numpy.ndarray
+            The unmixing matrix
         """
         max_iter = self.max_ica_iter
         max_sources = self.max_sources
@@ -505,14 +519,14 @@ class EMG:
         frq : int
             The sampling frequency of the data
 
-        Returns
-        -------
+        Attributes
+        ----------
         spike_train : numpy.ndarray
-            The spike train of the good motor units
+            The cleaned spike train
         source : numpy.ndarray
-            The sources of the good motor units
-        good_idx : numpy.ndarray
-            The indices of the good motor units
+            The cleaned sources from the ICA decomposition
+        _good_idx : numpy.ndarray
+            The cleaned unmixing matrix
         """
         from scipy.spatial.distance import cdist
 
@@ -594,10 +608,15 @@ class EMG:
     def compute_score(self):
         """
         Compute the silhouette score of the motor units
+
+        Attributes
+        ----------
+        sil_score : numpy.ndarray
+            The silhouette score of the good motor units
         """
         self.sil_score = self._compute_score_(self.spike_train, self.source)
 
-    def spikeTrain_plot(self, spike_train, frq, sil_score, minScore_toPlot=0.7):
+    def spikeTrain_plot(self, minScore_toPlot=0.7):
         """
         Plot the spike train of the good motor units
 
@@ -614,9 +633,9 @@ class EMG:
         """
         import plotly.graph_objects as go
         # import pandas as pd
-
-        selected_spikeTrain = spike_train[:, sil_score > minScore_toPlot]
-        order = np.argsort(np.sum(selected_spikeTrain, axis=1))[::-1]
+        frq = self.sampling_frequency
+        selected_spikeTrain = self.spike_train[:, self.sil_score > minScore_toPlot]
+        order = np.argsort(np.sum(selected_spikeTrain, axis=0))[::-1]
         bar_height = 0.2
         fig = go.Figure()
         for r in range(selected_spikeTrain.shape[1]):
