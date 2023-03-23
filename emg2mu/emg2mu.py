@@ -506,6 +506,31 @@ class EMG:
         self._raw_spike_train = spike_train
         self._raw_B = B
 
+    def save_ICA(self, path):
+        """
+        Save the ICA results
+
+        Parameters
+        ----------
+        path : str
+            The path to save the ICA results
+        """
+        np.savez(path, source=self._raw_source, spike_train=self._raw_spike_train, B=self._raw_B)
+
+    def load_ICA(self, path):
+        """
+        Load the ICA results
+
+        Parameters
+        ----------
+        path : str
+            The path to load the ICA results
+        """
+        data = np.load(path)
+        self._raw_source = data['source']
+        self._raw_spike_train = data['spike_train']
+        self._raw_B = data['B']
+
     def remove_motorUnit_duplicates(self, frq=2048):
         """
         Remove the duplicate motor units
