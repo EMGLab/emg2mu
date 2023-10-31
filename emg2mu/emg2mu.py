@@ -252,7 +252,8 @@ class EMG:
 
     def __init__(self, data, data_mode='monopolar', sampling_frequency=2048, extension_parameter=4, max_sources=300,
                  whiten_flag=1, inject_noise=np.inf, silhouette_threshold=0.6, output_file='sample_decomposed',
-                 max_ica_iter=100, save_flag=0, plot_spikeTrain=1, load_ICA=0):
+                 max_ica_iter=100, plot_spikeTrain=1,
+                 load_ICA=False, save_ICA=False, ICA_path=None, load_score=False, save_score=False, score_path=None):
         if isinstance(data, str):
             try:
                 import scipy.io as sio
@@ -272,9 +273,13 @@ class EMG:
         self.silhouette_threshold = silhouette_threshold
         self.output_file = output_file
         self.max_ica_iter = max_ica_iter
-        self.save_flag = save_flag
         self.plot_spikeTrain = plot_spikeTrain
         self.load_ICA = load_ICA
+        self.save_ICA = save_ICA
+        self.ICA_path = ICA_path
+        self.load_score = load_score
+        self.save_score = save_score
+        self.score_path = score_path
         self.motor_unit = {}
 
     def preprocess(self, data_mode='monopolar', whiten_flag=True, R=4, SNR=np.inf, array_shape=[8, 8]):
@@ -494,9 +499,12 @@ class EMG:
         _raw_B : numpy.ndarray
             The unmixing matrix
         """
-        if self._load_ICA:
-            self._load_ICA_(self.ICA_path)
-            return
+        if self.load_ICA:
+            try:
+                self._load_ICA_(self.ICA_path)
+                return
+            except FileNotFoundError:
+                print(f"ICA results not found at {self.ICA_path}")
         max_iter = self.max_ica_iter
         max_sources = self.max_sources
         if method == 'fastICA':
@@ -508,7 +516,7 @@ class EMG:
         self._raw_source = source
         self._raw_spike_train = spike_train
         self._raw_B = B
-        if self._save_ICA:
+        if self.save_ICA:
             self._save_ICA_(self.ICA_path)
 
     def _save_ICA_(self, path):
@@ -644,12 +652,24 @@ class EMG:
         sil_score : numpy.ndarray
             The silhouette score of the good motor units
         """
-        if self._load_score:
-            self._load_score_(self.score_path)
+        if self.load_score:
+            try:
+                self._load_score_(self.score_path)
+            except FileNotFoundError:
+                print('The silhouette score file does not exist. Computing the silhouette score...')
+                self.sil_score = self._compute_score_(self.spike_train, self.source)
+                if self.save_score:
+                    try:
+                        self._save_score_(self.score_path)
+                    except FileNotFoundError:
+                        print('The path to save the silhouette score does not exist.')
         else:
             self.sil_score = self._compute_score_(self.spike_train, self.source)
-            if self._save_score:
-                self._save_score_(self.score_path)
+            if self.save_score:
+                try:
+                    self._save_score_(self.score_path)
+                except FileNotFoundError:
+                    print('The path to save the silhouette score does not exist.')
 
     def _save_score_(self, path):
         """
