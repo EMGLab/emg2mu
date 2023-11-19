@@ -14,7 +14,7 @@
 			"reportOptionalMemberAccess": "none"
 			// "reportMissingImports": "none"
 		},
-		"python.linting.flake8Args": [
+		"flake8.args": [
 			"--max-line-length=120",
 			"--ignore=E128,W504,E125",
 		],
