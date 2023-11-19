@@ -103,7 +103,7 @@ def whiten(X, method='zca'):
                 'pca_cor', or 'cholesky'.
     Outputs:
         X_hat:  Whitened data matrix
-    
+
     References:
     https://gist.github.com/joelouismarino/ce239b5601fff2698895f48003f7464b
     """
@@ -143,7 +143,7 @@ def silhouette_score_torch(feats, labels):
     and the nearest cluster that the sample is not a part of.
     This function returns the mean Silhouette Coefficient over all samples.
     Note that this implementation is not optimized for speed.
-    
+
     Parameters
     ----------
     feats : torch.Tensor
@@ -151,7 +151,7 @@ def silhouette_score_torch(feats, labels):
         the samples.
     labels : torch.Tensor
         A 1D tensor of size (num_samples,) containing the labels of the samples.
-    
+
     Returns
     -------
     silhouette_score : float
@@ -360,7 +360,7 @@ class EMG:
             Maximum number of sources being decomposed by (FAST) ICA
         max_iter : int
             Maximum iterations for the (FAST) ICA decompsition
-        
+
         Returns
         -------
         uncleaned_source : numpy.ndarray
@@ -570,7 +570,7 @@ class EMG:
 
         spike_train = self._raw_spike_train
         source = self._raw_source
-        
+
         min_firing = 4
         max_firing = 35
         min_firing_interval = 1 / max_firing
@@ -610,7 +610,7 @@ class EMG:
         self.source = source
         self.spike_train = spike_train
         self._good_idx = good_idx
-    
+
     def _compute_score_(self, spike_train, source, frq=2048):
         """
         Compute the silhouette score of the motor units
@@ -642,7 +642,7 @@ class EMG:
             idx = kmeans.labels_
             sil_score[i] = silhouette_score(pks.reshape(-1, 1), idx)
         return sil_score
-    
+
     def compute_score(self):
         """
         Compute the silhouette score of the motor units
