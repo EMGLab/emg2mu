@@ -1,3 +1,19 @@
+"""
+emg2mu.py
+
+This module provides functions for motor-unit decomposition on hdEMG datasets.
+It includes functions for adding white Gaussian noise to a signal, whitening a matrix,
+and computing the mean Silhouette Coefficient of all samples.
+
+(c) Seyed Yahya Shirazi, SCCN, 2023-2024
+
+Copyright:
+This module is part of the emg2mu package, released under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+International License.
+You should have received a copy of the license along with the emg2mu package.
+If not, see https://creativecommons.org/licenses/by-nc-sa/4.0/.
+"""
+
 import numpy as np
 import warnings
 
