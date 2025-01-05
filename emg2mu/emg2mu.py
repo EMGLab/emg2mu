@@ -148,74 +148,6 @@ def whiten(X, method='zca'):
     return np.dot(X_centered, W.T)
 
 
-def silhouette_score_torch(feats, labels):
-    """
-    WARNING: DOES NOT WORK WITH M1 MACS
-
-    Compute the mean Silhouette Coefficient of all samples.
-    The Silhouette Coefficient is calculated using the mean intra-cluster distance (a)
-    and the mean nearest-cluster distance (b) for each sample. The Silhouette Coefficient
-    for a sample is (b - a) / max(a, b). To clarify, b is the distance between a sample
-    and the nearest cluster that the sample is not a part of.
-    This function returns the mean Silhouette Coefficient over all samples.
-    Note that this implementation is not optimized for speed.
-
-    Parameters
-    ----------
-    feats : torch.Tensor
-        A 2D tensor of size (num_samples, num_features) containing the features of
-        the samples.
-    labels : torch.Tensor
-        A 1D tensor of size (num_samples,) containing the labels of the samples.
-
-    Returns
-    -------
-    silhouette_score : float
-        The mean Silhouette Coefficient of all samples.
-    """
-
-    import torch
-    device, dtype = feats.device, feats.dtype
-    unique_labels = torch.unique(labels)  # not yet supported in pytorch for mps
-    num_samples = len(feats)
-    if not (1 < len(unique_labels) < num_samples):
-        raise ValueError("num unique labels must be > 1 and < num samples")
-    scores = []
-    for L in unique_labels:
-        curr_cluster = feats[labels == L]
-        num_elements = len(curr_cluster)
-        if num_elements > 1:
-            intra_cluster_dists = torch.cdist(curr_cluster, curr_cluster)
-            mean_intra_dists = torch.sum(intra_cluster_dists, dim=1) / (
-                num_elements - 1
-            )  # minus 1 to exclude self distance
-            dists_to_other_clusters = []
-            for otherL in unique_labels:
-                if otherL != L:
-                    other_cluster = feats[labels == otherL]
-                    inter_cluster_dists = torch.cdist(curr_cluster, other_cluster)
-                    mean_inter_dists = torch.sum(inter_cluster_dists, dim=1) / (
-                        len(other_cluster)
-                    )
-                    dists_to_other_clusters.append(mean_inter_dists)
-            dists_to_other_clusters = torch.stack(dists_to_other_clusters, dim=1)
-            min_dists, _ = torch.min(dists_to_other_clusters, dim=1)
-            curr_scores = (min_dists - mean_intra_dists) / (
-                torch.maximum(min_dists, mean_intra_dists)
-            )
-        else:
-            curr_scores = torch.tensor([0], device=device, dtype=dtype)
-
-        scores.append(curr_scores)
-
-    scores = torch.cat(scores, dim=0)
-    if len(scores) != num_samples:
-        raise ValueError(
-            f"scores (shape {scores.shape}) should have same length as feats (shape {feats.shape})"
-        )
-    return torch.mean(scores).item()
-
-
 class EMG:
     """
     # motor-unit decomposition on hdEMG datasets
@@ -627,9 +559,65 @@ class EMG:
         self.spike_train = spike_train
         self._good_idx = good_idx
 
-    def _compute_score_(self, spike_train, source, frq=2048):
+    def _fast_silhouette(self, data, labels):
         """
-        Compute the silhouette score of the motor units
+        Fast silhouette score calculation for 1D data with 2 clusters.
+
+        Parameters
+        ----------
+        data : numpy.ndarray
+            1D array of values
+        labels : numpy.ndarray
+            Binary cluster labels (0 or 1)
+
+        Returns
+        -------
+        float
+            Mean silhouette score
+        """
+        # Split data by cluster
+        cluster0 = data[labels == 0]
+        cluster1 = data[labels == 1]
+
+        if len(cluster0) == 0 or len(cluster1) == 0:
+            return 0.0
+
+        # Calculate distances for each point
+        scores = []
+
+        # Process cluster 0
+        if len(cluster0) > 1:
+            # Vectorized intra-cluster distances for cluster 0
+            intra0 = np.abs(cluster0.reshape(-1, 1) - cluster0.reshape(1, -1))
+            a0 = np.sum(intra0, axis=1) / (len(cluster0) - 1)  # Exclude self-distance
+
+            # Vectorized inter-cluster distances to cluster 1
+            inter0 = np.abs(cluster0.reshape(-1, 1) - cluster1.reshape(1, -1))
+            b0 = np.mean(inter0, axis=1)
+
+            # Calculate scores
+            s0 = (b0 - a0) / np.maximum(a0, b0)
+            scores.extend(s0)
+
+        # Process cluster 1
+        if len(cluster1) > 1:
+            # Vectorized intra-cluster distances for cluster 1
+            intra1 = np.abs(cluster1.reshape(-1, 1) - cluster1.reshape(1, -1))
+            a1 = np.sum(intra1, axis=1) / (len(cluster1) - 1)  # Exclude self-distance
+
+            # Vectorized inter-cluster distances to cluster 0
+            inter1 = np.abs(cluster1.reshape(-1, 1) - cluster0.reshape(1, -1))
+            b1 = np.mean(inter1, axis=1)
+
+            # Calculate scores
+            s1 = (b1 - a1) / np.maximum(a1, b1)
+            scores.extend(s1)
+
+        return np.mean(scores) if scores else 0.0
+
+    def _compute_score_(self, spike_train, source, frq=2048, max_samples=1000):
+        """
+        Compute the silhouette score of the motor units using optimized sampling
 
         Parameters
         ----------
@@ -639,24 +627,33 @@ class EMG:
             The sources of the good motor units
         frq : int
             The sampling frequency of the data
+        max_samples : int
+            Maximum number of peaks to use for silhouette calculation
 
         Returns
         -------
         sil_score : numpy.ndarray
             The silhouette score of the good motor units
         """
-        from sklearn.metrics import silhouette_score
         from sklearn.cluster import KMeans
         from scipy.signal import find_peaks
 
         sil_score = np.zeros(spike_train.shape[1])
+
         for i in range(spike_train.shape[1]):
             pow = np.power(source[:, i], 2)
             loc, _ = find_peaks(pow)
             pks = pow[loc]
+
+            # Sample peaks if there are too many
+            if len(pks) > max_samples:
+                sample_idx = np.random.choice(len(pks), max_samples, replace=False)
+                pks = pks[sample_idx]
+
             kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
             idx = kmeans.labels_
-            sil_score[i] = silhouette_score(pks.reshape(-1, 1), idx)
+            sil_score[i] = self._fast_silhouette(pks.reshape(-1, 1), idx)
+
         return sil_score
 
     def compute_score(self):
