@@ -6,3 +6,6 @@
 
 # temporary vi files
 ._*
+
+# ignore all in egg-info directory
+*.egg-info/*
