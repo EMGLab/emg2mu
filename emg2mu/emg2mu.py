@@ -706,7 +706,7 @@ class EMG:
         """
         self.sil_score = np.load(path)
 
-    def spikeTrain_plot(self, minScore_toPlot=0.7):
+    def spikeTrain_plot(self, minScore_toPlot=0.7, color_plot=True, spike_height=0.2, spike_length=0.01):
         """
         Plot the spike train of the good motor units
 
@@ -720,26 +720,32 @@ class EMG:
             The silhouette score of the good motor units
         minScore_toPlot : float
             The minimum silhouette score of the motor units to be included in the plot
+        color_plot : bool
+            Whether to use colored plots. Default is True
+        spike_height : float
+            The height of the spikes in the plot. Default is 0.2
+        spike_length : float
+            The length of the spikes in the plot. Default is 0.01
         """
         import plotly.graph_objects as go
         # import pandas as pd
         frq = self.sampling_frequency
         selected_spikeTrain = self.spike_train[:, self.sil_score > minScore_toPlot]
         order = np.argsort(np.sum(selected_spikeTrain, axis=0))[::-1]
-        bar_height = 0.2
         fig = go.Figure()
         for r in range(selected_spikeTrain.shape[1]):
             signRugVal = np.abs(np.sign(selected_spikeTrain[:, order[r]]))
             rug_x = np.where(signRugVal == 1)[0]
-            rug_y = [bar_height * r] * len(rug_x)
-            fig.add_scatter(x=rug_x, y=rug_y, mode="markers", marker=dict(size=2, color="black"))
+            rug_y = [spike_height * r] * len(rug_x)
+            color = "black" if not color_plot else f"rgb({r / selected_spikeTrain.shape[1] * 255}, 0, {255 - r / selected_spikeTrain.shape[1] * 255})"
+            fig.add_scatter(x=rug_x, y=rug_y, mode="markers", marker=dict(size=2, color=color))
         fig.update_layout(
             xaxis=dict(title="time (sec)", tickvals=np.linspace(0, selected_spikeTrain.shape[0], 10),
                        ticktext=np.round(np.linspace(0, selected_spikeTrain.shape[0] / frq, 10))),
-            yaxis=dict(title="Motor Unit", range=[0, selected_spikeTrain.shape[1] * bar_height]), height=400)
+            yaxis=dict(title="Motor Unit", range=[0, selected_spikeTrain.shape[1] * spike_height]), height=400)
         fig.show()
 
-    def run_decomposition(self):
+    def run_decomposition(self, color_plot=True, spike_height=0.2, spike_length=0.01):
         """
         Run the motor-unit decomposition on hdEMG datasets
 
@@ -783,5 +789,5 @@ class EMG:
         # plot the motor units in a nice way
         minScore_toPlot = 0.9
         if self.plot_spikeTrain:
-            self.plot_spikeTrain(spike_train, self.frq, silhouette_score, minScore_toPlot)
+            self.spikeTrain_plot(minScore_toPlot, color_plot, spike_height, spike_length)
         return self
