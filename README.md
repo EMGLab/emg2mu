@@ -38,7 +38,7 @@ emg.spikeTrain_plot()
 
 ## Example Dataset
 
-The package includes a sample dataset in the `example` folder. You can run:
+The package includes a sample dataset in the `example` folder (the example files will be added soon using git-annex). You can run:
 
 ```python
 from emg2mu import EMG
