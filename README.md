@@ -78,7 +78,7 @@ This project is licensed under the Creative Commons Attribution-NonCommercial-Sh
 
 ## Acknowledgments
 
-This toolbox is based on the hdEMG decomposition work by Jiang et al. (2021) and implements the FastICA algorithm with GPU acceleration using PyTorch.
+This toolbox is based on the [hdEMG decomposition toolbox](https://github.com/neuromechanist/hdEMG-Decomposition) in Matlab and introduces a *Pythonic* implementation of the algorithm with the GPU-accelerated FastICA algorithm and vectorized silhouette scoring algorithm.
 
 ## Contact
 
