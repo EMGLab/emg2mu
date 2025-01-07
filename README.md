@@ -36,15 +36,15 @@ emg.compute_score()
 emg.spikeTrain_plot()
 ```
 
-## Example Dataset
+## Sample Dataset
 
-The package includes a sample dataset in the `example` folder (the example files will be added soon using git-annex). You can run:
+The package includes a sample dataset in the `sample_data` folder. You can run:
 
 ```python
 from emg2mu import EMG
 
 # Run decomposition on sample data
-emg = EMG('example/sample1.mat')
+emg = EMG('sample_data/sample1.mat')
 emg.run_decomposition()
 ```
 
