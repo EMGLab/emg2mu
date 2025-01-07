@@ -539,7 +539,7 @@ class EMG:
                         spike_train[t + 1, k] = 0
 
         max_time_diff = 0.01
-        num_bins = 10
+        num_bins = 100
         duplicate_sources = []
         for k in plausible_firings:
             if k not in duplicate_sources:
