@@ -1,41 +1,91 @@
-## shablona
-A bare-bones template for Python packages, ready for use with setuptools (PyPI), pip, and py.test.
+# emg2mu: GPU-Accelerated High-Density EMG Decomposition
 
-### Using this as a template
-Let's assume that you want to create a small scientific Python project called `smallish`.
+A PyTorch-accelerated toolkit for decomposing high-density EMG (hdEMG) signals into individual motor unit action potentials using blind source separation techniques.
 
-To use this repository as a template, click the green "use this template" button on the front page of the "shablona" repository.
+## Features
 
-In "Repository name" enter the name of your project. For example, enter `smallish` here. After that, you can hit the "Create repository from template" button.
+- Fast motor unit decomposition using GPU-accelerated Independent Component Analysis (ICA)
+- Efficient signal preprocessing including whitening and noise injection
+- Automated duplicate motor unit removal
+- Quality assessment using silhouette coefficients
+- Interactive visualization of decomposed spike trains
+- Compatible with common hdEMG datasets (e.g., Hyser dataset)
 
-You should then be able to clone the new repo into your machine. You will want to change the names of the files. For example, you will want to move `shablona/shablona.py` to be called `smallish/smallish.py`
-```
-git mv shablona smallish
-git mv smallish/shablona.py smallish/smallish.py
-git mv smallish/tests/test_shablona.py smallish/tests/test_smallish.py
-```
+## Installation
 
-Make a commit recording these changes. Something like:
-```
-git commit -a -m "Moved names from `shablona` to `smallish`"
-```
+```bash
+# Download the repository from GitHub
+git clone https://github.com/neuromechanist/emg2mu
 
-You will want to edit a few more places that still have `shablona` in them. Type the following to see where all these files are:
-```
-git grep shablona
+# Install the package
+cd emg2mu
+pip install .
 ```
 
-You can replace `shablona` for `smallish` quickly with:
+## Quick Start
+
+```python
+from emg2mu import EMG
+
+# Load and decompose hdEMG data
+emg = EMG('path/to/data.mat')
+emg.preprocess()
+emg.run_ICA(method='torch')  # Uses GPU acceleration
+emg.remove_motorUnit_duplicates()
+emg.compute_score()
+emg.spikeTrain_plot()
 ```
-git grep -l 'shablona' | xargs sed -i 's/shablona/smallish/g'
+
+## Sample Dataset
+
+The package includes a sample dataset in the `sample_data` folder. You can run:
+
+```python
+from emg2mu import EMG
+
+# Run decomposition on sample data
+emg = EMG('sample_data/sample1.mat')
+emg.run_decomposition()
 ```
 
-Edit `shablona/__init__.py`, and `shablona/version.py` with the information specific to your project.
+Unfortunately, the sample ICA decomposition is not included due to the file size limitation. However, using the PyTorch-accelerated ICA algorithm, you can decompose the sample data in a couple of minutes.
 
-This very file (`README.md`) should be edited to reflect what your project is about.
+## Contributing
 
-At this point, make another commit, and continue to develop your own code based on this template.
+We welcome contributions! Please:
 
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-### Contributing
-If you wish to make any changes (e.g. add documentation, tests, continuous integration, etc.), please follow the [Shablona](https://github.com/uwescience/shablona) template.
+## References
+
+When using this toolbox, please cite:
+
+```bibtex
+@software{shirazi2024emg2mu,
+  author = {Shirazi, Seyed Yahya},
+  title = {emg2mu: GPU-accelerated High-Density EMG Decomposition},
+  year = {2024},
+  publisher = {GitHub},
+  url = {https://github.com/neuromechanist/emg2mu}
+}
+```
+
+## License
+
+This project is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+This toolbox is based on the [hdEMG decomposition toolbox](https://github.com/neuromechanist/hdEMG-Decomposition) in Matlab and introduces a *Pythonic* implementation of the algorithm with the GPU-accelerated FastICA algorithm and vectorized silhouette scoring algorithm.
+
+Note: The motor-unit scoring mechanism uses a different algorithm than the one used in the Matlab counterpart, resulting in overall higher scores for similar decompositions. However, I believe that this one is more transparent, scalable, and extensible. Please keep in mind the change.
+
+## Contact
+
+Seyed (Yahya) Shirazi - [@neuromechanist](https://github.com/neuromechanist)
+
+Project Link: [https://github.com/neuromechanist/emg2mu](https://github.com/neuromechanist/emg2mu)
