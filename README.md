@@ -82,6 +82,8 @@ This project is licensed under the Creative Commons Attribution-NonCommercial-Sh
 
 This toolbox is based on the [hdEMG decomposition toolbox](https://github.com/neuromechanist/hdEMG-Decomposition) in Matlab and introduces a *Pythonic* implementation of the algorithm with the GPU-accelerated FastICA algorithm and vectorized silhouette scoring algorithm.
 
+Note: The motor-unit scoring mechanism uses a different algorithm than the one used in the Matlab counterpart, resulting in overall higher scores for similar decompositions. However, I believe that this one is more transparent, scalable, and extensible. Please keep in mind the change.
+
 ## Contact
 
 Seyed (Yahya) Shirazi - [@neuromechanist](https://github.com/neuromechanist)
