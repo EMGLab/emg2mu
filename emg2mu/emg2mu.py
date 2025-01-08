@@ -706,44 +706,125 @@ class EMG:
         """
         self.sil_score = np.load(path)
 
-    def spikeTrain_plot(self, minScore_toPlot=0.7, color_plot=True, spike_height=0.2, spike_length=0.01):
+    def spikeTrain_plot(
+        self, minScore_toPlot=0.7,
+        spike_height=0.2, spike_width=0.01,
+        color_plot=True, colormap='viridis',
+        x_range=None):
         """
         Plot the spike train of the good motor units
 
         Parameters
         ----------
-        spike_train : numpy.ndarray
-            The spike train of the good motor units
-        frq : int
-            The sampling frequency of the data
-        silhouette_score : numpy.ndarray
-            The silhouette score of the good motor units
         minScore_toPlot : float
             The minimum silhouette score of the motor units to be included in the plot
         color_plot : bool
             Whether to use colored plots. Default is True
         spike_height : float
-            The height of the spikes in the plot. Default is 0.2
-        spike_length : float
-            The length of the spikes in the plot. Default is 0.01
+            The relative height of spikes within each MU's band. Default is 0.2.
+            Higher values make spikes taller relative to the spacing between MUs.
+        spike_width : float
+            The width/thickness of each spike line in the plot. Default is 0.01
+        colormap : str
+            Name of the colormap to use (any matplotlib colormap name). Default is 'viridis'.
+            Common options include: 'viridis', 'plasma', 'inferno', 'magma', 'cividis',
+            'Spectral', 'RdYlBu', etc.
+        x_range : tuple, optional
+            Custom x-axis range as (start, end) in seconds. If None, uses full data range.
         """
         import plotly.graph_objects as go
-        # import pandas as pd
+        import matplotlib.pyplot as plt
+
         frq = self.sampling_frequency
         selected_spikeTrain = self.spike_train[:, self.sil_score > minScore_toPlot]
         order = np.argsort(np.sum(selected_spikeTrain, axis=0))[::-1]
+        n_units = selected_spikeTrain.shape[1]
+
+        # Calculate fixed spacing based on number of MUs (800px height for ~120 MUs)
+        target_height = 800
+        units_per_800px = 120
+        fixed_spacing = target_height / units_per_800px
+        plot_height = int(n_units * fixed_spacing)
+
+        # Create a colormap
+        if color_plot:
+            try:
+                colors = self._create_spike_colors_(colormap, plt, n_units)
+            except ValueError:
+                print(f"Warning: Colormap '{colormap}' not found. Using 'viridis' instead.")
+                colors = self._create_spike_colors_('viridis', plt, n_units)
+
+        else:
+            colors = ["black"] * n_units
+
         fig = go.Figure()
-        for r in range(selected_spikeTrain.shape[1]):
-            signRugVal = np.abs(np.sign(selected_spikeTrain[:, order[r]]))
-            rug_x = np.where(signRugVal == 1)[0]
-            rug_y = [spike_height * r] * len(rug_x)
-            color = "black" if not color_plot else f"rgb({r / selected_spikeTrain.shape[1] * 255}, 0, {255 - r / selected_spikeTrain.shape[1] * 255})"
-            fig.add_scatter(x=rug_x, y=rug_y, mode="markers", marker=dict(size=2, color=color))
+
+        # Fixed unit spacing
+        unit_spacing = 1.0
+
+        # Plot each motor unit's spikes
+        for r in range(n_units):
+            spike_indices = np.where(selected_spikeTrain[:, order[r]] == 1)[0]
+            base_y = unit_spacing * r
+
+            # Create vertical lines for each spike
+            if len(spike_indices) > 0:
+                # Create y coordinates for vertical lines
+                y_coords = []
+                x_coords = []
+                for idx in spike_indices:
+                    # Add coordinates for vertical line (bottom to top)
+                    x_coords.extend([idx, idx, None])
+                    y_coords.extend([base_y - spike_height / 2, base_y + spike_height / 2, None])
+
+                fig.add_trace(go.Scatter(
+                    x=x_coords,
+                    y=y_coords,
+                    mode='lines',
+                    line=dict(
+                        color=colors[r],
+                        width=spike_width * 100  # Increased width for better visibility
+                    ),
+                    showlegend=False
+                ))
+
+        # Calculate y-axis tick positions for 10% increments
+        tick_increment = max(1, n_units // 10)  # At least 1 MU between ticks
+        tick_positions = np.arange(0, n_units, tick_increment)
+        tick_labels = [str(i) for i in tick_positions]
+
         fig.update_layout(
-            xaxis=dict(title="time (sec)", tickvals=np.linspace(0, selected_spikeTrain.shape[0], 10),
-                       ticktext=np.round(np.linspace(0, selected_spikeTrain.shape[0] / frq, 10))),
-            yaxis=dict(title="Motor Unit", range=[0, selected_spikeTrain.shape[1] * spike_height]), height=400)
+            xaxis=dict(
+                title="time (sec)",
+                range=[0, selected_spikeTrain.shape[0]] if x_range is None else
+                      [int(x_range[0] * frq), int(x_range[1] * frq)],
+                tickvals=np.arange(0, selected_spikeTrain.shape[0] + 1, selected_spikeTrain.shape[0] // 10),
+                ticktext=np.arange(0, int(selected_spikeTrain.shape[0] / frq) + 1,
+                                   int(selected_spikeTrain.shape[0] / frq / 10))
+            ),
+            yaxis=dict(
+                title="Motor Unit",
+                tickvals=tick_positions,
+                ticktext=tick_labels,
+                range=[-0.5, n_units + 0.5]
+            ),
+            height=plot_height,
+            showlegend=False,
+            plot_bgcolor='white'  # White background
+        )
+
         fig.show()
+
+    def _create_spike_colors_(self, colormap, plt, n_units):
+        cmap = plt.get_cmap(colormap)
+        # Generate colors from colormap
+        colors = []
+        for i in range(n_units):
+            normalized_idx = i / (n_units - 1) if n_units > 1 else 0
+            rgba = cmap(normalized_idx)
+            # Convert RGBA to RGB hex, ensuring full opacity
+            colors.append(f'rgb({int(rgba[0]*255)},{int(rgba[1]*255)},{int(rgba[2]*255)})')
+        return colors
 
     def run_decomposition(self, color_plot=True, spike_height=0.2, spike_length=0.01):
         """
