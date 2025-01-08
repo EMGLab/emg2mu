@@ -48,6 +48,8 @@ emg = EMG('sample_data/sample1.mat')
 emg.run_decomposition()
 ```
 
+Unfortunately, the sample ICA decomposition is not included due to the file size limitation. However, using the PyTorch-accelerated ICA algorithm, you can decompose the sample data in a couple of minutes.
+
 ## Contributing
 
 We welcome contributions! Please:
