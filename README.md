@@ -44,9 +44,12 @@ The package includes a sample dataset in the `sample_data` folder. You can run:
 from emg2mu import EMG
 
 # Run decomposition on sample data
-emg = EMG('sample_data/sample1.mat')
+emg = EMG('emg2mu/sample_data/sample1.mat')
 emg.run_decomposition()
 ```
+
+This would be the spike-train plot from the sample data:
+![newplot](https://github.com/user-attachments/assets/daca81f2-6832-4c27-bdd0-df6587acdac0)
 
 Unfortunately, the sample ICA decomposition is not included due to the file size limitation. However, using the PyTorch-accelerated ICA algorithm, you can decompose the sample data in a couple of minutes.
 
