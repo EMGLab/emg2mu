@@ -707,8 +707,8 @@ class EMG:
         self.sil_score = np.load(path)
 
     def spikeTrain_plot(
-        self, minScore_toPlot=0.7,
-        spike_height=0.2, spike_width=0.01,
+        self, minScore_toPlot=0.93,
+        spike_height=0.4, spike_width=0.01,
         color_plot=True, colormap='viridis',
         x_range=None):
         """
@@ -742,9 +742,10 @@ class EMG:
 
         # Calculate fixed spacing based on number of MUs (800px height for ~120 MUs)
         target_height = 800
-        units_per_800px = 120
+        units_per_800px = 40
         fixed_spacing = target_height / units_per_800px
-        plot_height = int(n_units * fixed_spacing)
+        # Cap at 400px height if fewer than 20 MUs
+        plot_height = int(n_units * fixed_spacing) if n_units > units_per_800px / 2 else target_height / 2
 
         # Create a colormap
         if color_plot:
