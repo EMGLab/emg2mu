@@ -20,6 +20,8 @@ REQUIRES = [
     'numpy>=1.20.0',
     'scipy>=1.7.0',
     'scikit-learn>=1.0.0',
+    'matplotlib>=3.4.0',
+    'nbformat>=5.1.0',
     'plotly>=5.0.0',
     # Optional for non-M1 Macs
     'torch>=2.5.0;platform_system!="Darwin" or platform_machine!="arm64"',
