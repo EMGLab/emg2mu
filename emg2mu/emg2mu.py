@@ -230,7 +230,7 @@ class EMG:
         self.min_firing_rate = min_firing_rate  # Minimum firing rate in Hz
         self.max_firing_rate = max_firing_rate  # Maximum firing rate in Hz
         self.max_duplicate_time_diff = max_duplicate_time_diff  # Maximum time difference for duplicate detection
-        self.max_silhouette_samples = max_silhouette_samples  # Maximum samples for silhouette calculation
+        self._max_samples = max_silhouette_samples  # Maximum samples for silhouette calculation
         self.ica_tolerance = ica_tolerance  # Convergence tolerance for ICA
 
         # Plot parameters
@@ -362,7 +362,7 @@ class EMG:
         # Fallback to CPU
         return 'cpu'
 
-    def _torch_fastICA_(self, extended_emg, M, max_iter):
+    def _torch_fastICA_(self, extended_emg, M, max_iter, tolerance=None, device=None):
         """
         Run the ICA decomposition using torch
 
@@ -374,6 +374,8 @@ class EMG:
             Maximum number of sources being decomposed by (FAST) ICA
         max_iter : int
             Maximum iterations for the (FAST) ICA decompsition
+        tolerance : float, optional
+            Convergence tolerance for ICA. If None, uses class-level ica_tolerance.
 
         Returns
         -------
@@ -390,20 +392,23 @@ class EMG:
         import torch.nn.functional as F
         from scipy.signal import find_peaks
         from sklearn.cluster import KMeans
-        tolerance = self.ica_tolerance
-        emg = torch.tensor(extended_emg.T, dtype=torch.float32, device=self.device)
+
+        _tolerance = tolerance if tolerance is not None else self.ica_tolerance
+        _device = device if device is not None else self.device
+
+        emg = torch.tensor(extended_emg.T, dtype=torch.float32, device=_device)
         num_chan, frames = emg.shape
-        B = torch.zeros((num_chan, M), dtype=torch.float32, device=self.device)
-        spike_train = torch.zeros((frames, M), dtype=torch.float32, device=self.device)
-        source = torch.zeros((frames, M), dtype=torch.float32, device=self.device)
+        B = torch.zeros((num_chan, M), dtype=torch.float32, device=_device)
+        spike_train = torch.zeros((frames, M), dtype=torch.float32, device=_device)
+        source = torch.zeros((frames, M), dtype=torch.float32, device=_device)
         # score = torch.zeros(M, dtype=torch.float32, device=device)
         print(f"running ICA for {M} sources")
         for i in range(M):
             w = []
-            w.append(torch.randn(num_chan, 1, device=self.device, dtype=torch.float32))
-            w.append(torch.randn(num_chan, 1, device=self.device, dtype=torch.float32))
+            w.append(torch.randn(num_chan, 1, device=_device, dtype=torch.float32))
+            w.append(torch.randn(num_chan, 1, device=_device, dtype=torch.float32))
             for n in range(1, max_iter):
-                if abs(torch.matmul(w[n].T, w[n - 1]) - 1) > tolerance:
+                if abs(torch.matmul(w[n].T, w[n - 1]) - 1) > _tolerance:
                     A = torch.mean(2 * torch.matmul(w[n].T, emg))
                     w.append(emg @ ((torch.matmul(w[n].T, emg).T) ** 2) - A * w[n])
                     w[-1] = w[-1] - torch.matmul(torch.matmul(B, B.T), w[-1])
@@ -431,7 +436,7 @@ class EMG:
         print("\nICA decomposition is completed")
         return source.cpu().numpy(), B.cpu().numpy(), spike_train
 
-    def _fastICA_(self, extended_emg, M, max_iter):
+    def _fastICA_(self, extended_emg, M, max_iter, tolerance=None):
         """
         Run the ICA decomposition
 
@@ -443,6 +448,8 @@ class EMG:
             Maximum number of sources being decomposed by (FAST) ICA
         max_iter : int
             Maximum iterations for the (FAST) ICA decompsition
+        tolerance : float, optional
+            Convergence tolerance for ICA. If None, uses class-level ica_tolerance.
 
         Returns
         -------
@@ -455,7 +462,7 @@ class EMG:
         """
         from scipy.signal import find_peaks
         from sklearn.cluster import KMeans
-        tolerance = 10e-5
+        _tolerance = tolerance if tolerance is not None else self.ica_tolerance
         emg = extended_emg.T
         num_chan, frames = emg.shape
         B = np.zeros((num_chan, M))
@@ -468,7 +475,7 @@ class EMG:
             w.append(np.random.randn(num_chan, 1))
             w.append(np.random.randn(num_chan, 1))
             for n in range(1, max_iter):
-                if abs(np.dot(w[n].T, w[n - 1]) - 1) > tolerance:
+                if abs(np.dot(w[n].T, w[n - 1]) - 1) > _tolerance:
                     A = np.mean(2 * np.dot(w[n].T, emg))
                     w.append(emg @ ((np.dot(w[n].T, emg).T) ** 2) - A * w[n])
                     w[-1] = w[-1] - np.dot(np.dot(B, B.T), w[-1])
@@ -495,7 +502,7 @@ class EMG:
         print("\nICA decomposition is completed")
         return source, B, spike_train
 
-    def run_ICA(self, method='fastICA'):
+    def run_ICA(self, method='fastICA', device=None, max_iter=None, tolerance=None):
         """
         Run the ICA algorithm
 
@@ -503,6 +510,13 @@ class EMG:
         ----------
         method : str
             The ICA algorithm to be used. Either 'fastICA' or 'torch'
+        device : str, optional
+            Device to use for torch operations. If None, uses the class-level device setting.
+            Can be 'auto', 'cuda', 'mps', 'cpu', or specific CUDA device.
+        max_iter : int, optional
+            Maximum iterations for ICA algorithm. If None, uses the class-level max_ica_iter setting.
+        tolerance : float, optional
+            Convergence tolerance for ICA. If None, uses the class-level ica_tolerance setting.
 
         Attributes
         ----------
@@ -519,14 +533,30 @@ class EMG:
                 return
             except FileNotFoundError:
                 print(f"ICA results not found at {self.ICA_path}")
-        max_iter = self.max_ica_iter
-        max_sources = self.max_sources
-        if method == 'fastICA':
-            source, B, spike_train = self._fastICA_(self._preprocessed, max_sources, max_iter)
-        elif method == 'torch':
-            source, B, spike_train = self._torch_fastICA_(self._preprocessed, max_sources, max_iter)
-        else:
-            raise ValueError('method must be either fastICA or torch')
+        # Use method-level parameters if provided, otherwise use class-level defaults
+        _max_iter = max_iter if max_iter is not None else self.max_ica_iter
+        _max_sources = self.max_sources
+        _device = device if device is not None else self.device
+        _tolerance = tolerance if tolerance is not None else self.ica_tolerance
+
+        # Store original device if we're changing it temporarily
+        original_device = self.device
+        if device is not None:
+            self.device = self._select_device(device)
+
+        try:
+            if method == 'fastICA':
+                source, B, spike_train = self._fastICA_(
+                    self._preprocessed, _max_sources, _max_iter, tolerance=_tolerance)
+            elif method == 'torch':
+                source, B, spike_train = self._torch_fastICA_(
+                    self._preprocessed, _max_sources, _max_iter, tolerance=_tolerance, device=_device)
+            else:
+                raise ValueError('method must be either fastICA or torch')
+        finally:
+            # Restore original device if we changed it
+            if device is not None:
+                self.device = original_device
         self._raw_source = source
         self._raw_spike_train = spike_train
         self._raw_B = B
@@ -558,7 +588,8 @@ class EMG:
         self._raw_spike_train = data['spike_train']
         self._raw_B = data['B']
 
-    def remove_motorUnit_duplicates(self, frq=2048):
+    def remove_motorUnit_duplicates(self, frq=None, min_firing_rate=None, max_firing_rate=None,
+                                  max_duplicate_time_diff=None, num_bins=None):
         """
         Remove the duplicate motor units
 
@@ -585,14 +616,19 @@ class EMG:
         spike_train = self._raw_spike_train
         source = self._raw_source
 
-        min_firing = self.min_firing_rate
-        max_firing = self.max_firing_rate
-        min_firing_interval = 1 / max_firing  # Minimum time between firings
-        time_stamp = np.linspace(1 / frq, spike_train.shape[0] / frq, spike_train.shape[0])
+        _frq = frq if frq is not None else self.sampling_frequency
+        _min_firing = min_firing_rate if min_firing_rate is not None else self.min_firing_rate
+        _max_firing = max_firing_rate if max_firing_rate is not None else self.max_firing_rate
+        _max_time_diff = max_duplicate_time_diff if max_duplicate_time_diff is not None \
+            else self.max_duplicate_time_diff
+        _num_bins = num_bins if num_bins is not None else self.num_bins
+
+        min_firing_interval = 1 / _max_firing  # Minimum time between firings
+        time_stamp = np.linspace(1 / _frq, spike_train.shape[0] / _frq, spike_train.shape[0])
 
         firings = spike_train.sum(axis=0)
-        lower_bound_cond = np.where(firings > min_firing * time_stamp[-1])[0]
-        upper_bound_cond = np.where(firings < max_firing * time_stamp[-1])[0]
+        lower_bound_cond = np.where(firings > _min_firing * time_stamp[-1])[0]
+        upper_bound_cond = np.where(firings < _max_firing * time_stamp[-1])[0]
         plausible_firings = np.intersect1d(lower_bound_cond, upper_bound_cond)
 
         for k in plausible_firings:
@@ -604,18 +640,16 @@ class EMG:
                     else:
                         spike_train[t + 1, k] = 0
 
-        max_time_diff = self.max_duplicate_time_diff
-        num_bins = self.num_bins
         duplicate_sources = []
         for k in plausible_firings:
             if k not in duplicate_sources:
                 for j in np.setdiff1d(plausible_firings[plausible_firings != k], duplicate_sources):
                     spike_times_1 = time_stamp[spike_train[:, k] == 1]
                     spike_times_2 = time_stamp[spike_train[:, j] == 1]
-                    hist_1, _ = np.histogram(spike_times_1, bins=num_bins)
-                    hist_2, _ = np.histogram(spike_times_2, bins=num_bins)
+                    hist_1, _ = np.histogram(spike_times_1, bins=_num_bins)
+                    hist_2, _ = np.histogram(spike_times_2, bins=_num_bins)
                     dist = cdist(hist_1[np.newaxis, :], hist_2[np.newaxis, :], metric='cosine')[0][0]
-                    if dist < max_time_diff:
+                    if dist < _max_time_diff:
                         duplicate_sources.append(j)
 
         good_idx = np.setdiff1d(plausible_firings, duplicate_sources)
@@ -681,7 +715,7 @@ class EMG:
 
         return np.mean(scores) if scores else 0.0
 
-    def _compute_score_(self, spike_train, source, frq=2048):
+    def _compute_score_(self, spike_train, source, max_samples=None):
         """
         Compute the silhouette score of the motor units using optimized sampling
 
@@ -704,6 +738,8 @@ class EMG:
         from sklearn.cluster import KMeans
         from scipy.signal import find_peaks
 
+        _max_samples = max_samples if max_samples is not None else self.max_silhouette_samples
+
         sil_score = np.zeros(spike_train.shape[1])
 
         for i in range(spike_train.shape[1]):
@@ -712,8 +748,8 @@ class EMG:
             pks = pow[loc]
 
             # Sample peaks if there are too many
-            if len(pks) > self.max_silhouette_samples:
-                sample_idx = np.random.choice(len(pks), self.max_silhouette_samples, replace=False)
+            if len(pks) > _max_samples:
+                sample_idx = np.random.choice(len(pks), _max_samples, replace=False)
                 pks = pks[sample_idx]
 
             kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
@@ -722,9 +758,15 @@ class EMG:
 
         return sil_score
 
-    def compute_score(self):
+    def compute_score(self, max_silhouette_samples=None):
         """
         Compute the silhouette score of the motor units
+
+        Parameters
+        ----------
+        max_silhouette_samples : int, optional
+            Maximum number of peaks to use for silhouette calculation.
+            If None, uses class-level max_silhouette_samples.
 
         Attributes
         ----------
@@ -736,14 +778,18 @@ class EMG:
                 self._load_score_(self.score_path)
             except FileNotFoundError:
                 print('The silhouette score file does not exist. Computing the silhouette score...')
-                self.sil_score = self._compute_score_(self.spike_train, self.source)
+                self.sil_score = self._compute_score_(
+                    self.spike_train, self.source,
+                    max_silhouette_samples=max_silhouette_samples)
                 if self.save_score:
                     try:
                         self._save_score_(self.score_path)
                     except FileNotFoundError:
                         print('The path to save the silhouette score does not exist.')
         else:
-            self.sil_score = self._compute_score_(self.spike_train, self.source)
+            self.sil_score = self._compute_score_(
+                self.spike_train, self.source,
+                max_silhouette_samples=max_silhouette_samples)
             if self.save_score:
                 try:
                     self._save_score_(self.score_path)
