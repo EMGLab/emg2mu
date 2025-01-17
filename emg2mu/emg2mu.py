@@ -5,7 +5,7 @@ This module provides functions for motor-unit decomposition on hdEMG datasets.
 It includes functions for adding white Gaussian noise to a signal, whitening a matrix,
 and computing the mean Silhouette Coefficient of all samples.
 
-(c) Seyed Yahya Shirazi, SCCN, 2023-2024
+(c) Seyed Yahya Shirazi, SCCN, 2023-2025
 
 Copyright:
 This module is part of the emg2mu package, released under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0
@@ -165,43 +165,81 @@ class EMG:
     data_mode : str, optional
         EMG can be recorded in the 'monopolar' or 'bipolar' mode. Default = 'monopolar'
     sampling_frequency : int, optional
-        Sampling frequency of the data, default = 2048 Hz
+        Sampling frequency of the data. Default = 2048 Hz
     extension_parameter : int, optional
         The number of times to repeat the data blocks, see the Hyser paper for more detail. Default = 4
     max_sources : int, optional
-        Maximum iterations for the (FAST) ICA decompsition. Default = 300
+        Maximum iterations for the (FAST) ICA decomposition. Default = 300
     whiten_flag : int, optional
         Whether to whiten the data prior to the ICA. Default = 1
     inject_noise : float, optional
-        Adding white noise to the EMG mixutre. Uses the equivalent of the Communication Toolbox AWGN function.
+        Adding white noise to the EMG mixture. Uses the equivalent of the Communication Toolbox AWGN function.
         Default = Inf for not injecting any artificial noise.
     silhouette_threshold : float, optional
         The silhouette threshold to detect the good motor units. Default = 0.6
     output_file : str, optional
-        The path that the files should be saved there. The function does not create the path, rather uses it.
-        Default is the is the 'sample' path of the toolbox.
-    save_flag : int, optional
-        Whether the files are saved or not, default is 0, so it is NOT saving your output.
-    plot_spikeTrain : int, optional
-        Whether to plot the resulting spike trains. Default is 1
-    load_ICA : int, optional
-        Whether to load precomputed ICA results for debugging. Default is 0
+        The path where the files should be saved. The function does not create the path, rather uses it.
+        Default is the 'sample' path of the toolbox.
+    max_ica_iter : int, optional
+        Maximum number of iterations for ICA algorithm. Default = 100
+    plot_spikeTrain : bool, optional
+        Whether to plot the resulting spike trains. Default = True
+    load_ICA : bool, optional
+        Whether to load precomputed ICA results. Default = False
+    save_ICA : bool, optional
+        Whether to save ICA results for later use. Default = False
+    ICA_path : str, optional
+        Path to save/load ICA results. Default = None
+    load_score : bool, optional
+        Whether to load precomputed silhouette scores. Default = False
+    save_score : bool, optional
+        Whether to save silhouette scores for later use. Default = False
+    score_path : str, optional
+        Path to save/load silhouette scores. Default = None
+    num_bins : int, optional
+        Number of bins used for histogram analysis in duplicate detection. Default = 100
+    min_firing_rate : float, optional
+        Minimum firing rate in Hz for valid motor units. Default = 4
+    max_firing_rate : float, optional
+        Maximum firing rate in Hz for valid motor units. Default = 35
+    max_duplicate_time_diff : float, optional
+        Maximum time difference for considering motor units as duplicates. Default = 0.01
+    device : str, optional
+        Device to use for torch operations. Can be 'auto', 'cuda', 'mps', 'cpu', or specific CUDA device.
+        'auto' will automatically select the best available device. Default = 'auto'
 
     Returns
     -------
     motor_unit : dict
         The structure including the following fields:
-        spike_train
-        waveform
-        ica_weight
-        whiten_matrix
-        silhouette
+        spike_train : Motor unit spike train data
+        source : Source signals from ICA decomposition
+        good_idx : Indices of valid motor units
+        silhouette_score : Silhouette scores for motor units
     """
 
     def __init__(self, data, data_mode='monopolar', sampling_frequency=2048, extension_parameter=4, max_sources=300,
                  whiten_flag=1, inject_noise=np.inf, silhouette_threshold=0.6, output_file='sample_decomposed',
                  max_ica_iter=100, plot_spikeTrain=1,
-                 load_ICA=False, save_ICA=False, ICA_path=None, load_score=False, save_score=False, score_path=None):
+                 load_ICA=False, save_ICA=False, ICA_path=None, load_score=False, save_score=False, score_path=None,
+                 num_bins=100, min_firing_rate=4, max_firing_rate=35, max_duplicate_time_diff=0.01,
+                 device='auto', max_silhouette_samples=1000, ica_tolerance=1e-5,
+                 plot_target_height=800, plot_units_per_height=40):
+        # Processing parameters
+        self.num_bins = num_bins  # Number of bins for histogram in duplicate detection
+        self.min_firing_rate = min_firing_rate  # Minimum firing rate in Hz
+        self.max_firing_rate = max_firing_rate  # Maximum firing rate in Hz
+        self.max_duplicate_time_diff = max_duplicate_time_diff  # Maximum time difference for duplicate detection
+        self.max_silhouette_samples = max_silhouette_samples  # Maximum samples for silhouette calculation
+        self.ica_tolerance = ica_tolerance  # Convergence tolerance for ICA
+
+        # Plot parameters
+        self.plot_target_height = plot_target_height  # Target plot height in pixels
+        self.plot_units_per_height = plot_units_per_height  # Number of units per height unit
+
+        # Device selection for torch operations
+        self.device = self._select_device(device)
+
         if isinstance(data, str):
             try:
                 import scipy.io as sio
@@ -296,7 +334,35 @@ class EMG:
         self._preprocessed = preprocessed_emg
         # return self
 
-    def _torch_fastICA_(self, extended_emg, M, max_iter, device='mps'):
+    def _select_device(self, device_preference='auto'):
+        """
+        Select the appropriate device for torch operations.
+
+        Parameters
+        ----------
+        device_preference : str
+            Can be 'auto', 'cuda', 'mps', 'cpu', or a specific CUDA device like 'cuda:0'
+
+        Returns
+        -------
+        str
+            The selected device string for torch
+        """
+        import torch
+
+        if device_preference != 'auto':
+            return device_preference
+
+        # Check for CUDA
+        if torch.cuda.is_available():
+            return 'cuda'
+        # Check for MPS (Apple Silicon)
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            return 'mps'
+        # Fallback to CPU
+        return 'cpu'
+
+    def _torch_fastICA_(self, extended_emg, M, max_iter):
         """
         Run the ICA decomposition using torch
 
@@ -324,18 +390,18 @@ class EMG:
         import torch.nn.functional as F
         from scipy.signal import find_peaks
         from sklearn.cluster import KMeans
-        tolerance = 10e-5
-        emg = torch.tensor(extended_emg.T, dtype=torch.float32, device=device)
+        tolerance = self.ica_tolerance
+        emg = torch.tensor(extended_emg.T, dtype=torch.float32, device=self.device)
         num_chan, frames = emg.shape
-        B = torch.zeros((num_chan, M), dtype=torch.float32, device=device)
-        spike_train = torch.zeros((frames, M), dtype=torch.float32, device=device)
-        source = torch.zeros((frames, M), dtype=torch.float32, device=device)
+        B = torch.zeros((num_chan, M), dtype=torch.float32, device=self.device)
+        spike_train = torch.zeros((frames, M), dtype=torch.float32, device=self.device)
+        source = torch.zeros((frames, M), dtype=torch.float32, device=self.device)
         # score = torch.zeros(M, dtype=torch.float32, device=device)
         print(f"running ICA for {M} sources")
         for i in range(M):
             w = []
-            w.append(torch.randn(num_chan, 1, device=device, dtype=torch.float32))
-            w.append(torch.randn(num_chan, 1, device=device, dtype=torch.float32))
+            w.append(torch.randn(num_chan, 1, device=self.device, dtype=torch.float32))
+            w.append(torch.randn(num_chan, 1, device=self.device, dtype=torch.float32))
             for n in range(1, max_iter):
                 if abs(torch.matmul(w[n].T, w[n - 1]) - 1) > tolerance:
                     A = torch.mean(2 * torch.matmul(w[n].T, emg))
@@ -519,9 +585,9 @@ class EMG:
         spike_train = self._raw_spike_train
         source = self._raw_source
 
-        min_firing = 4
-        max_firing = 35
-        min_firing_interval = 1 / max_firing
+        min_firing = self.min_firing_rate
+        max_firing = self.max_firing_rate
+        min_firing_interval = 1 / max_firing  # Minimum time between firings
         time_stamp = np.linspace(1 / frq, spike_train.shape[0] / frq, spike_train.shape[0])
 
         firings = spike_train.sum(axis=0)
@@ -538,8 +604,8 @@ class EMG:
                     else:
                         spike_train[t + 1, k] = 0
 
-        max_time_diff = 0.01
-        num_bins = 100
+        max_time_diff = self.max_duplicate_time_diff
+        num_bins = self.num_bins
         duplicate_sources = []
         for k in plausible_firings:
             if k not in duplicate_sources:
@@ -615,7 +681,7 @@ class EMG:
 
         return np.mean(scores) if scores else 0.0
 
-    def _compute_score_(self, spike_train, source, frq=2048, max_samples=1000):
+    def _compute_score_(self, spike_train, source, frq=2048):
         """
         Compute the silhouette score of the motor units using optimized sampling
 
@@ -646,8 +712,8 @@ class EMG:
             pks = pow[loc]
 
             # Sample peaks if there are too many
-            if len(pks) > max_samples:
-                sample_idx = np.random.choice(len(pks), max_samples, replace=False)
+            if len(pks) > self.max_silhouette_samples:
+                sample_idx = np.random.choice(len(pks), self.max_silhouette_samples, replace=False)
                 pks = pks[sample_idx]
 
             kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
@@ -740,12 +806,11 @@ class EMG:
         order = np.argsort(np.sum(selected_spikeTrain, axis=0))[::-1]
         n_units = selected_spikeTrain.shape[1]
 
-        # Calculate fixed spacing based on number of MUs (800px height for ~120 MUs)
-        target_height = 800
-        units_per_800px = 40
-        fixed_spacing = target_height / units_per_800px
-        # Cap at 400px height if fewer than 20 MUs
-        plot_height = int(n_units * fixed_spacing) if n_units > units_per_800px / 2 else target_height / 2
+        # Calculate fixed spacing based on number of MUs
+        fixed_spacing = self.plot_target_height / self.plot_units_per_height
+        # Cap at half target height if fewer than half the target units
+        plot_height = int(n_units * fixed_spacing) if (n_units > self.plot_units_per_height / 2) \
+            else self.plot_target_height / 2
 
         # Create a colormap
         if color_plot:
