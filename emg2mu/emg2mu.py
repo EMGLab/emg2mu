@@ -502,7 +502,8 @@ class EMG:
         print("\nICA decomposition is completed")
         return source, B, spike_train
 
-    def run_ICA(self, method='fastICA', device=None, max_iter=None, tolerance=None):
+    def run_ICA(self, method='fastICA', device=None, max_iter=None, tolerance=None, max_sources=None,
+                save_ICA=None, load_ICA=None, ICA_path=None):
         """
         Run the ICA algorithm
 
@@ -527,17 +528,21 @@ class EMG:
         _raw_B : numpy.ndarray
             The unmixing matrix
         """
-        if self.load_ICA:
-            try:
-                self._load_ICA_(self.ICA_path)
-                return
-            except FileNotFoundError:
-                print(f"ICA results not found at {self.ICA_path}")
         # Use method-level parameters if provided, otherwise use class-level defaults
         _max_iter = max_iter if max_iter is not None else self.max_ica_iter
-        _max_sources = self.max_sources
+        _max_sources = max_sources if max_sources is not None else self.max_sources
         _device = device if device is not None else self.device
         _tolerance = tolerance if tolerance is not None else self.ica_tolerance
+        _save_ICA = save_ICA if save_ICA is not None else self.save_ICA
+        _load_ICA = load_ICA if load_ICA is not None else self.load_ICA
+        _ICA_path = ICA_path if ICA_path is not None else self.ICA_path
+
+        if _load_ICA:
+            try:
+                self._load_ICA_(_ICA_path)
+                return
+            except FileNotFoundError:
+                print(f"ICA results not found at {_ICA_path}")
 
         # Store original device if we're changing it temporarily
         original_device = self.device
@@ -560,8 +565,8 @@ class EMG:
         self._raw_source = source
         self._raw_spike_train = spike_train
         self._raw_B = B
-        if self.save_ICA:
-            self._save_ICA_(self.ICA_path)
+        if _save_ICA:
+            self._save_ICA_(_ICA_path)
 
     def _save_ICA_(self, path):
         """
@@ -758,7 +763,8 @@ class EMG:
 
         return sil_score
 
-    def compute_score(self, max_silhouette_samples=None):
+    def compute_score(self, max_silhouette_samples=None,
+                      load_score=None, save_score=None, score_path=None):
         """
         Compute the silhouette score of the motor units
 
@@ -773,26 +779,30 @@ class EMG:
         sil_score : numpy.ndarray
             The silhouette score of the good motor units
         """
-        if self.load_score:
+        _load_score = load_score if load_score is not None else self.load_score
+        _save_score = save_score if save_score is not None else self.save_score
+        _score_path = score_path if score_path is not None else self.score_path
+
+        if _load_score:
             try:
-                self._load_score_(self.score_path)
+                self._load_score_(_score_path)
             except FileNotFoundError:
                 print('The silhouette score file does not exist. Computing the silhouette score...')
                 self.sil_score = self._compute_score_(
                     self.spike_train, self.source,
-                    max_silhouette_samples=max_silhouette_samples)
-                if self.save_score:
+                    max_samples=max_silhouette_samples)
+                if _save_score:
                     try:
-                        self._save_score_(self.score_path)
+                        self._save_score_(_score_path)
                     except FileNotFoundError:
                         print('The path to save the silhouette score does not exist.')
         else:
             self.sil_score = self._compute_score_(
                 self.spike_train, self.source,
                 max_samples=max_silhouette_samples)
-            if self.save_score:
+            if _save_score:
                 try:
-                    self._save_score_(self.score_path)
+                    self._save_score_(_score_path)
                 except FileNotFoundError:
                     print('The path to save the silhouette score does not exist.')
 
