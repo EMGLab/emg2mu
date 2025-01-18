@@ -230,7 +230,7 @@ class EMG:
         self.min_firing_rate = min_firing_rate  # Minimum firing rate in Hz
         self.max_firing_rate = max_firing_rate  # Maximum firing rate in Hz
         self.max_duplicate_time_diff = max_duplicate_time_diff  # Maximum time difference for duplicate detection
-        self._max_samples = max_silhouette_samples  # Maximum samples for silhouette calculation
+        self.max_silhouette_samples = max_silhouette_samples  # Maximum samples for silhouette calculation
         self.ica_tolerance = ica_tolerance  # Convergence tolerance for ICA
 
         # Plot parameters
@@ -245,7 +245,7 @@ class EMG:
                 import scipy.io as sio
                 emg_file = sio.loadmat(data)
                 self.data = emg_file['Data'][0, 0]
-                self.sampling_frequency = emg_file['SamplingFrequency']
+                self.sampling_frequency = emg_file['SamplingFrequency'].item()  # only get the element, not the array
             except ImportError:
                 raise ValueError("The data file must be a MAT array.")
         else:
@@ -789,7 +789,7 @@ class EMG:
         else:
             self.sil_score = self._compute_score_(
                 self.spike_train, self.source,
-                max_silhouette_samples=max_silhouette_samples)
+                max_samples=max_silhouette_samples)
             if self.save_score:
                 try:
                     self._save_score_(self.score_path)

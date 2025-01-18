@@ -11,4 +11,4 @@
 *.egg-info/*
 *.dist/*
 *.build/*
-emg2mu/__pycache__/*
+*/__pycache__/*
