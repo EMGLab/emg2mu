@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=24.2.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emg2mu"
+version = "0.0.1"
+description = "Decompose hd-EMG signals into motor units"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "CC-BY-NC-SA-4.0" }
+authors = [
+    { name = "Seyed Yahya Shirazi", email = "shirazi@ieee.org" }
+]
+maintainers = [
+    { name = "Seyed Yahya Shirazi", email = "shirazi@ieee.org" }
+]
+dependencies = [
+    "numpy>=1.20.0",
+    "scipy>=1.7.0",
+    "scikit-learn>=1.0.0",
+    "matplotlib>=3.4.0",
+    "nbformat>=5.1.0",
+    "plotly>=5.0.0",
+    "torch>=2.5.0; platform_system != 'Darwin' or platform_machine != 'arm64'",
+    "torch>=2.5.0; platform_system == 'Darwin' and platform_machine == 'arm64'"
+]
+
+[project.urls]
+Homepage = "https://github.com/neuromechanist/emg2mu"
+Download = "https://pypi.org/project/emg2mu"
