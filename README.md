@@ -50,8 +50,10 @@ emg = EMG('emg2mu/sample_data/sample1.mat')
 emg.run_decomposition()
 ```
 
-This would be the spike-train plot from the sample data:
-![newplot](https://github.com/user-attachments/assets/daca81f2-6832-4c27-bdd0-df6587acdac0)
+This would be the spike-train and waveform plots from the sample data:
+![spiketrain](https://github.com/user-attachments/assets/080c779d-506f-4a7a-a3a4-67198702b146)
+![waveform](https://github.com/user-attachments/assets/eb3f9c86-81ba-4ceb-a6bf-d27ab759e275)
+
 
 Unfortunately, the sample ICA decomposition is not included due to the file size limitation. However, using the PyTorch-accelerated ICA algorithm, you can decompose the sample data in a couple of minutes.
 
