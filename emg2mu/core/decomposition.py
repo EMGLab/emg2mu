@@ -171,7 +171,7 @@ class EMG:
         return self
 
     def remove_duplicates(self, min_firing_rate=4, max_firing_rate=35,
-                         max_duplicate_time_diff=0.01, num_bins=100):
+                         max_duplicate_time_diff=0.01, num_bins=50):
         """
         Remove duplicate motor units from the decomposition results.
 
