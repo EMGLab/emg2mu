@@ -3,6 +3,7 @@ This module provides ICA (Independent Component Analysis) implementations for EM
 Includes both standard CPU-based and PyTorch-accelerated implementations.
 """
 
+from tqdm import tqdm
 import numpy as np
 from scipy.signal import find_peaks
 from sklearn.cluster import KMeans
@@ -39,9 +40,10 @@ def fastICA(extended_emg, M, max_iter, tolerance=1e-5):
     B = np.zeros((num_chan, M))
     spike_train = np.zeros((frames, M))
     source = np.zeros((frames, M))
-    print(f"running ICA for {M} sources")
+    print(f"Running ICA for {M} sources...")
     
-    for i in range(M):
+    pbar = tqdm(range(M), desc="Processing sources", unit="source")
+    for i in pbar:
         w = []
         w.append(np.random.randn(num_chan, 1))
         w.append(np.random.randn(num_chan, 1))
@@ -69,11 +71,9 @@ def fastICA(extended_emg, M, max_iter, tolerance=1e-5):
             
         spike_train[spike_loc, i] = 1
         B[:, i] = w[-1].flatten()
-        print(".", end="")
-        if i > 1 and (i - 1) % 50 == 0:
-            print("\n")
+        pbar.set_postfix({"source": f"{i+1}/{M}"})
             
-    print("\nICA decomposition is completed")
+    print("ICA decomposition completed")
     return source, B, spike_train
 
 
@@ -109,8 +109,9 @@ def torch_fastICA(extended_emg, M, max_iter, tolerance=1e-5, device='cuda'):
     spike_train = torch.zeros((frames, M), dtype=torch.float32, device=device)
     source = torch.zeros((frames, M), dtype=torch.float32, device=device)
     
-    print(f"running ICA for {M} sources")
-    for i in range(M):
+    print(f"Running ICA for {M} sources...")
+    pbar = tqdm(range(M), desc="Processing sources", unit="source")
+    for i in pbar:
         w = []
         w.append(torch.randn(num_chan, 1, device=device, dtype=torch.float32))
         w.append(torch.randn(num_chan, 1, device=device, dtype=torch.float32))
@@ -138,11 +139,9 @@ def torch_fastICA(extended_emg, M, max_iter, tolerance=1e-5, device='cuda'):
             
         spike_train[spike_loc, i] = 1
         B[:, i] = w[-1].flatten()
-        print(".", end="")
-        if i > 1 and (i - 1) % 50 == 0:
-            print('\n')
+        pbar.set_postfix({"source": f"{i+1}/{M}"})
             
-    print("\nICA decomposition is completed")
+    print("ICA decomposition completed")
     return source.cpu().numpy(), B.cpu().numpy(), spike_train.cpu().numpy()
 
 
