@@ -33,10 +33,8 @@ def create_spike_colors(colormap, n_units):
     return colors
 
 
-def plot_waveforms(source, spike_train, sampling_frequency, window_size=0.005,
-                  plot_individual=False, confidence_interval=True, alpha=0.1,
-                  colormap='viridis', silhouette_scores=None, min_score=0.93,
-                  n_cols=5, subplot_height=200, subplot_width=300):
+def plot_waveforms(source, spike_train, sampling_frequency, silhouette_scores=None,
+                  min_score=0.93, **kwargs):
     """
     Plot average waveforms for each motor unit with optional individual spikes and confidence intervals.
 
@@ -79,6 +77,16 @@ def plot_waveforms(source, spike_train, sampling_frequency, window_size=0.005,
     if n_units == 0:
         raise ValueError("No motor units meet the silhouette score threshold")
 
+    # Set default parameters
+    window_size = kwargs.get('window_size', 0.005)
+    plot_individual = kwargs.get('plot_individual', False)
+    confidence_interval = kwargs.get('confidence_interval', True)
+    alpha = kwargs.get('alpha', 0.1)
+    colormap = kwargs.get('colormap', 'viridis')
+    n_cols = kwargs.get('n_cols', 5)
+    subplot_height = kwargs.get('subplot_height', 200)
+    subplot_width = kwargs.get('subplot_width', 300)
+
     # Calculate window size in samples
     window_samples = int(window_size * sampling_frequency)
     time_vector = np.linspace(-window_size, window_size, 2 * window_samples + 1) * 1000  # Convert to ms
@@ -86,14 +94,21 @@ def plot_waveforms(source, spike_train, sampling_frequency, window_size=0.005,
     # Create color map
     colors = create_spike_colors(colormap, n_units)
 
+
     # Calculate grid dimensions
     n_rows = (n_units + n_cols - 1) // n_cols  # Ceiling division
+    
+    # Create subplot titles with scores
+    subplot_titles = []
+    for i in range(n_units):
+        score_text = f" (score: {silhouette_scores[i]:.2f})" if silhouette_scores is not None else ""
+        subplot_titles.append(f'Motor Unit {i+1}<span style="font-size:10px">{score_text}</span>')
     
     # Create subplot grid
     fig = make_subplots(
         rows=n_rows,
         cols=n_cols,
-        subplot_titles=[f'Motor Unit {i+1}' for i in range(n_units)],
+        subplot_titles=subplot_titles,
         shared_xaxes=True,
         shared_yaxes=True,
         horizontal_spacing=0.05,
@@ -204,9 +219,8 @@ def plot_waveforms(source, spike_train, sampling_frequency, window_size=0.005,
     fig.show()
 
 
-def plot_spike_train(spike_train, sampling_frequency, silhouette_scores=None, min_score=0.93,
-                    spike_height=0.4, spike_width=0.01, color_plot=True, colormap='viridis',
-                    x_range=None, target_height=800, units_per_height=40):
+def plot_spike_train(spike_train, sampling_frequency, silhouette_scores=None,
+                    min_score=0.93, **kwargs):
     """
     Plot the spike train of motor units.
 
@@ -246,6 +260,15 @@ def plot_spike_train(spike_train, sampling_frequency, silhouette_scores=None, mi
 
     order = np.argsort(np.sum(selected_spikeTrain, axis=0))[::-1]
     n_units = selected_spikeTrain.shape[1]
+
+    # Set default parameters
+    spike_height = kwargs.get('spike_height', 0.4)
+    spike_width = kwargs.get('spike_width', 0.01)
+    color_plot = kwargs.get('color_plot', True)
+    colormap = kwargs.get('colormap', 'viridis')
+    x_range = kwargs.get('x_range', None)
+    target_height = kwargs.get('target_height', 800)
+    units_per_height = kwargs.get('units_per_height', 40)
 
     # Calculate fixed spacing based on number of MUs
     fixed_spacing = target_height / units_per_height

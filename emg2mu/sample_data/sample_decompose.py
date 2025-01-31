@@ -42,31 +42,20 @@ def main():
         min_score=0.93
     )
 
-    # Plot waveforms in grid layout (5 columns by default)
+    # Plot waveforms with individual spikes shown
     emg.plot(
         plot_type='waveforms',
         min_score=0.93,
-        window_size=0.005,  # ±5ms window
         plot_individual=True,  # Show individual spikes
-        confidence_interval=True,
-        alpha=0.1,
-        colormap='turbo',
-        n_cols=5,  # Number of columns in grid
-        subplot_height=200,  # Height of each subplot in pixels
-        subplot_width=300  # Width of each subplot in pixels
+        colormap='turbo'
     )
 
-    # Example of custom grid layout (e.g., 3 columns)
+    # Plot waveforms with only mean and confidence intervals
     emg.plot(
         plot_type='waveforms',
         min_score=0.93,
-        window_size=0.005,
         plot_individual=False,  # Hide individual spikes for cleaner view
-        confidence_interval=True,
-        colormap='turbo',
-        n_cols=3,  # Wider subplots with fewer columns
-        subplot_height=250,
-        subplot_width=400
+        colormap='turbo'
     )
 
 
@@ -81,13 +70,7 @@ def load_saved_results():
 
     # Plot results
     emg.plot(plot_type='spike_train', min_score=0.93)
-    emg.plot(
-        plot_type='waveforms',
-        min_score=0.93,
-        n_cols=5,  # Use default grid layout
-        subplot_height=200,
-        subplot_width=300
-    )
+    emg.plot(plot_type='waveforms', min_score=0.93)
 
 
 if __name__ == '__main__':
