@@ -30,10 +30,12 @@ from emg2mu import EMG
 # Load and decompose hdEMG data
 emg = EMG('path/to/data.mat')
 emg.preprocess()
-emg.run_ICA(method='torch')  # Uses GPU acceleration
-emg.remove_motorUnit_duplicates()
-emg.compute_score()
-emg.spikeTrain_plot()
+emg.run_ica(method='torch')  # Uses GPU acceleration
+emg.remove_duplicates()
+emg.compute_scores()
+emg.plot(plot_type='spike_train')
+emg.plot(plot_type='waveforms')
+emg.save('path/to/save')
 ```
 
 ## Sample Dataset
