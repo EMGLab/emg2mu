@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "emg2mu"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Decompose hd-EMG signals into motor units"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -29,3 +29,6 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/neuromechanist/emg2mu"
 Download = "https://pypi.org/project/emg2mu"
+
+[tool.setuptools.dynamic]
+version = {attr = "emg2mu.version.__version__"}
