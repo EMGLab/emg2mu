@@ -10,7 +10,7 @@ from ..detection.duplicate_detection import remove_duplicates, compute_silhouett
 from ..utils.io import (load_mat_data, save_results, load_results,
                        save_ica_results, load_ica_results,
                        save_silhouette_scores, load_silhouette_scores)
-from ..visualization.plots import plot_spike_train
+from ..visualization.plots import plot_spike_train, plot_waveforms
 
 
 class EMG:
@@ -236,14 +236,17 @@ class EMG:
 
         return self
 
-    def plot(self, min_score=0.93, spike_height=0.4, spike_width=0.01,
-            color_plot=True, colormap='viridis', x_range=None,
-            target_height=800, units_per_height=40):
+    def plot(self, plot_type='spike_train', min_score=0.93, spike_height=0.4, spike_width=0.01,
+            color_plot=True, colormap='viridis', x_range=None, target_height=800, units_per_height=40,
+            window_size=0.005, plot_individual=False, confidence_interval=True, alpha=0.1,
+            n_cols=5, subplot_height=200, subplot_width=300):
         """
-        Plot the spike train results.
+        Plot the decomposition results.
 
         Parameters
         ----------
+        plot_type : str, optional
+            Type of plot to generate ('spike_train' or 'waveforms'). Default = 'spike_train'
         min_score : float, optional
             Minimum silhouette score to plot. Default = 0.93
         spike_height : float, optional
@@ -260,6 +263,14 @@ class EMG:
             Target plot height in pixels. Default = 800
         units_per_height : int, optional
             Units per height unit. Default = 40
+        window_size : float, optional
+            Time window around each spike in seconds (default = 0.005, i.e., ±5ms)
+        plot_individual : bool, optional
+            Whether to plot individual spikes in background (default = False)
+        confidence_interval : bool, optional
+            Whether to show confidence intervals (default = True)
+        alpha : float, optional
+            Transparency for individual spikes (default = 0.1)
 
         Returns
         -------
@@ -268,10 +279,21 @@ class EMG:
         if self.spike_train is None:
             raise ValueError("No spike train data available to plot")
 
-        plot_spike_train(
-            self.spike_train, self.sampling_frequency,
-            self.sil_score, min_score, spike_height, spike_width,
-            color_plot, colormap, x_range, target_height, units_per_height)
+        if plot_type == 'spike_train':
+            plot_spike_train(
+                self.spike_train, self.sampling_frequency,
+                self.sil_score, min_score, spike_height, spike_width,
+                color_plot, colormap, x_range, target_height, units_per_height)
+        elif plot_type == 'waveforms':
+            if self.source is None:
+                raise ValueError("No source signals available to plot waveforms")
+            plot_waveforms(
+                self.source, self.spike_train, self.sampling_frequency,
+                window_size, plot_individual, confidence_interval, alpha,
+                colormap, self.sil_score, min_score,
+                n_cols, subplot_height, subplot_width)
+        else:
+            raise ValueError("plot_type must be either 'spike_train' or 'waveforms'")
 
     def save(self, file_path=None):
         """
