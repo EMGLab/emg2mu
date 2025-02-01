@@ -41,13 +41,13 @@ def fastICA(extended_emg, M, max_iter, tolerance=1e-5):
     spike_train = np.zeros((frames, M))
     source = np.zeros((frames, M))
     print(f"Running ICA for {M} sources...")
-    
+
     pbar = tqdm(range(M), desc="Processing sources", unit="source")
     for i in pbar:
         w = []
         w.append(np.random.randn(num_chan, 1))
         w.append(np.random.randn(num_chan, 1))
-        
+
         for n in range(1, max_iter):
             if abs(np.dot(w[n].T, w[n - 1]) - 1) > tolerance:
                 A = np.mean(2 * np.dot(w[n].T, emg))
@@ -56,23 +56,23 @@ def fastICA(extended_emg, M, max_iter, tolerance=1e-5):
                 w[-1] = w[-1] / np.linalg.norm(w[-1])
             else:
                 break
-                
+
         source[:, i] = np.dot(w[-1].T, emg)
         pow = np.power(source[:, i], 2)
         loc, _ = find_peaks(pow)
         pks = pow[loc]
         kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
         idx = kmeans.labels_
-        
+
         if sum(idx == 0) <= sum(idx == 1):
             spike_loc = loc[idx == 0]
         else:
             spike_loc = loc[idx == 1]
-            
+
         spike_train[spike_loc, i] = 1
         B[:, i] = w[-1].flatten()
         pbar.set_postfix({"source": f"{i+1}/{M}"})
-            
+
     print("ICA decomposition completed")
     return source, B, spike_train
 
@@ -108,14 +108,14 @@ def torch_fastICA(extended_emg, M, max_iter, tolerance=1e-5, device='cuda'):
     B = torch.zeros((num_chan, M), dtype=torch.float32, device=device)
     spike_train = torch.zeros((frames, M), dtype=torch.float32, device=device)
     source = torch.zeros((frames, M), dtype=torch.float32, device=device)
-    
+
     print(f"Running ICA for {M} sources...")
     pbar = tqdm(range(M), desc="Processing sources", unit="source")
     for i in pbar:
         w = []
         w.append(torch.randn(num_chan, 1, device=device, dtype=torch.float32))
         w.append(torch.randn(num_chan, 1, device=device, dtype=torch.float32))
-        
+
         for n in range(1, max_iter):
             if abs(torch.matmul(w[n].T, w[n - 1]) - 1) > tolerance:
                 A = torch.mean(2 * torch.matmul(w[n].T, emg))
@@ -124,23 +124,23 @@ def torch_fastICA(extended_emg, M, max_iter, tolerance=1e-5, device='cuda'):
                 w[-1] = F.normalize(w[-1], p=2, dim=0)
             else:
                 break
-                
+
         source[:, i] = torch.matmul(w[-1].T, emg)
         pow = torch.pow(source[:, i], 2)
         loc, _ = find_peaks(pow.cpu().numpy())
         pks = pow[loc].cpu().numpy()
         kmeans = KMeans(n_clusters=2, n_init=10).fit(pks.reshape(-1, 1))
         idx = kmeans.labels_
-        
+
         if sum(idx == 1) <= sum(idx == 0):
             spike_loc = loc[idx == 1]
         else:
             spike_loc = loc[idx == 0]
-            
+
         spike_train[spike_loc, i] = 1
         B[:, i] = w[-1].flatten()
         pbar.set_postfix({"source": f"{i+1}/{M}"})
-            
+
     print("ICA decomposition completed")
     return source.cpu().numpy(), B.cpu().numpy(), spike_train.cpu().numpy()
 

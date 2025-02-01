@@ -64,7 +64,7 @@ def save_results(file_path, spike_train, source, good_idx, silhouette_score=None
     }
     if silhouette_score is not None:
         save_dict['silhouette_score'] = silhouette_score
-    
+
     np.savez(file_path, **save_dict)
 
 
@@ -98,11 +98,11 @@ def load_results(file_path):
             if key not in data:
                 raise ValueError(f"Required field '{key}' not found in results file")
             results[key] = data[key]
-        
+
         # Optional silhouette score
         if 'silhouette_score' in data:
             results['silhouette_score'] = data['silhouette_score']
-        
+
         return results
     except Exception as e:
         raise ValueError(f"Error loading results file: {str(e)}")

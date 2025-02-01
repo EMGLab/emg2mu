@@ -51,7 +51,7 @@ class EMG:
                  inject_noise=np.inf, silhouette_threshold=0.6,
                  output_file='sample_decomposed', max_ica_iter=100,
                  device='auto'):
-        
+
         # Load data
         if isinstance(data, str):
             self.data, self.sampling_frequency = load_mat_data(data)

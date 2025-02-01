@@ -103,7 +103,7 @@ def awgn(sig, reqSNR, *args):
 def whiten(X, method='zca'):
     """
     Whitens the input matrix X using specified whitening method.
-    
+
     Parameters
     ----------
     X : numpy.ndarray
@@ -111,7 +111,7 @@ def whiten(X, method='zca'):
     method : str
         Whitening method. Must be one of 'zca', 'zca_cor', 'pca',
         'pca_cor', or 'cholesky'.
-        
+
     Returns
     -------
     X_hat : numpy.ndarray
@@ -125,7 +125,7 @@ def whiten(X, method='zca'):
     X_centered = X - np.mean(X, axis=0)
     Sigma = np.dot(X_centered.T, X_centered) / X_centered.shape[0]
     W = None
-    
+
     if method in ['zca', 'pca', 'cholesky']:
         U, Lambda, _ = np.linalg.svd(Sigma)
         if method == 'zca':
@@ -144,5 +144,5 @@ def whiten(X, method='zca'):
             W = np.dot(np.dot(np.diag(1.0 / np.sqrt(Theta + 1e-5)), G.T), np.linalg.inv(V_sqrt))
     else:
         raise Exception('Whitening method not found.')
-        
+
     return np.dot(X_centered, W.T)

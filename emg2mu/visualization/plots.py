@@ -97,13 +97,13 @@ def plot_waveforms(source, spike_train, sampling_frequency, silhouette_scores=No
 
     # Calculate grid dimensions
     n_rows = (n_units + n_cols - 1) // n_cols  # Ceiling division
-    
+
     # Create subplot titles with scores
     subplot_titles = []
     for i in range(n_units):
         score_text = f" (score: {silhouette_scores[i]:.2f})" if silhouette_scores is not None else ""
         subplot_titles.append(f'Motor Unit {i+1}<span style="font-size:10px">{score_text}</span>')
-    
+
     # Create subplot grid
     fig = make_subplots(
         rows=n_rows,
@@ -119,7 +119,7 @@ def plot_waveforms(source, spike_train, sampling_frequency, silhouette_scores=No
     for i in range(n_units):
         # Find spike timestamps
         spike_indices = np.where(selected_spike_train[:, i])[0]
-        
+
         if len(spike_indices) == 0:
             continue
 
@@ -129,12 +129,12 @@ def plot_waveforms(source, spike_train, sampling_frequency, silhouette_scores=No
             if idx - window_samples >= 0 and idx + window_samples + 1 <= len(selected_source):
                 segment = selected_source[idx - window_samples:idx + window_samples + 1, i]
                 waveforms.append(segment)
-        
+
         if not waveforms:
             continue
-            
+
         waveforms = np.array(waveforms)
-        
+
         # Calculate mean waveform and confidence intervals
         mean_waveform = np.mean(waveforms, axis=0)
         if confidence_interval:
@@ -195,7 +195,7 @@ def plot_waveforms(source, spike_train, sampling_frequency, silhouette_scores=No
         plot_bgcolor='white',
         title='Motor Unit Action Potential Waveforms'
     )
-    
+
     # Update axes
     fig.update_xaxes(
         title_text='Time (ms)',
