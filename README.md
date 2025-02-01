@@ -33,24 +33,15 @@ emg.preprocess()
 emg.run_ica(method='torch')  # Uses GPU acceleration
 emg.remove_duplicates()
 emg.compute_scores()
-emg.plot(plot_type='spike_train')
-emg.plot(plot_type='waveforms')
+emg.plot(plot_type='spike_train', min_score=0.93)
+emg.plot(plot_type='waveforms', min_score=0.93)
 emg.save('path/to/save')
 ```
 
-## Sample Dataset
+### Sample Dataset
 
-The package includes a sample dataset in the `sample_data` folder. You can run:
+The package includes a sample dataset in the `sample_data` folder. You can pass the sample file (`'emg2mu/sample_data/sample1.mat'`) to get the plots below:
 
-```python
-from emg2mu import EMG
-
-# Run decomposition on sample data
-emg = EMG('emg2mu/sample_data/sample1.mat')
-emg.run_decomposition()
-```
-
-This would be the spike-train and waveform plots from the sample data:
 ![spiketrain](https://github.com/user-attachments/assets/080c779d-506f-4a7a-a3a4-67198702b146)
 ![waveform](https://github.com/user-attachments/assets/eb3f9c86-81ba-4ceb-a6bf-d27ab759e275)
 
