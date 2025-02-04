@@ -1,5 +1,8 @@
 # emg2mu: GPU-Accelerated High-Density EMG Decomposition
 
+[![Tests](https://github.com/neuromechanist/emg2mu/actions/workflows/tests.yml/badge.svg)](https://github.com/neuromechanist/emg2mu/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/neuromechanist/emg2mu/graph/badge.svg?token=WSO46BQO78)](https://codecov.io/gh/neuromechanist/emg2mu)
+
 A PyTorch-accelerated toolkit for decomposing high-density EMG (hdEMG) signals into individual motor unit action potentials using blind source separation techniques.
 
 ## Features
