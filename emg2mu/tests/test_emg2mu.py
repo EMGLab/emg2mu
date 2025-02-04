@@ -33,7 +33,7 @@ def test_spikeTrain_plot_color():
     emg = ece.EMG(data=emg_data)
     emg.spike_train = spike_train
     emg.sil_score = np.random.rand(8)
-    emg.spikeTrain_plot(color_plot=True)
+    emg.plot(plot_type='spike_train', color_plot=True)
     # Add assertions to verify the plot if needed
 
 
@@ -45,7 +45,7 @@ def test_spikeTrain_plot_monochrome():
     emg = ece.EMG(data=emg_data)
     emg.spike_train = spike_train
     emg.sil_score = np.random.rand(8)
-    emg.spikeTrain_plot(color_plot=False)
+    emg.plot(plot_type='spike_train', color_plot=False)
     # Add assertions to verify the plot if needed
 
 
@@ -57,8 +57,8 @@ def test_spikeTrain_plot_spike_height():
     emg = ece.EMG(data=emg_data)
     emg.spike_train = spike_train
     emg.sil_score = np.random.rand(8)
-    emg.spikeTrain_plot(spike_height=0.1)
-    emg.spikeTrain_plot(spike_height=0.3)
+    emg.plot(plot_type='spike_train', spike_height=0.1)
+    emg.plot(plot_type='spike_train', spike_height=0.3)
     # Add assertions to verify the plot if needed
 
 
@@ -70,6 +70,6 @@ def test_spikeTrain_plot_spike_length():
     emg = ece.EMG(data=emg_data)
     emg.spike_train = spike_train
     emg.sil_score = np.random.rand(8)
-    emg.spikeTrain_plot(spike_length=0.005)
-    emg.spikeTrain_plot(spike_length=0.02)
+    emg.plot(plot_type='spike_train', spike_length=0.005)
+    emg.plot(plot_type='spike_train', spike_length=0.02)
     # Add assertions to verify the plot if needed

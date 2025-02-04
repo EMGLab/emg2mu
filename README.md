@@ -20,7 +20,37 @@ git clone https://github.com/neuromechanist/emg2mu
 # Install the package
 cd emg2mu
 pip install .
+
+# For development installation with testing dependencies
+pip install -e ".[test]"
 ```
+
+## Testing
+
+The package includes a comprehensive test suite. To run the tests:
+
+```bash
+# Run all tests
+pytest
+
+# Run tests with coverage report
+pytest --cov=emg2mu
+
+# Run tests in parallel
+pytest -n auto
+
+# Run specific test file
+pytest emg2mu/tests/test_decomposition.py
+```
+
+The test suite includes:
+- Unit tests for core functionality
+- Integration tests for the complete workflow
+- Device-specific tests for GPU acceleration
+- Synthetic data generation for reproducible testing
+
+All tests use synthetic data generated within the test suite, making them fast and 
+resource-efficient to run.
 
 ## Quick Start
 
