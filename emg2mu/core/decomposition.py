@@ -102,7 +102,7 @@ class EMG:
 
         # Add white noise if specified
         if not np.isinf(self.inject_noise):
-            emg = awgn(emg, self.inject_noise, 'dB')
+            emg = awgn(emg, self.inject_noise)
 
         # Create bipolar setting from monopolar data if needed
         if self.data_mode == "bipolar":
