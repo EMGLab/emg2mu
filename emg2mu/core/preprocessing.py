@@ -9,6 +9,7 @@ Functions:
 import numpy as np
 import warnings
 
+
 def awgn(sig, reqSNR, *args):
     """
     Add white Gaussian noise to a signal.
@@ -58,11 +59,11 @@ def awgn(sig, reqSNR, *args):
         if isinstance(args[0], str) and args[0].lower() == 'measured':
             sigPower = np.sum(np.abs(sig)**2) / sig.size
         else:
-            sigPower = args[0]
-            if not isinstance(sigPower, (int, float)) or sigPower <= 0:
-                raise ValueError("The signal power input must be a real scalar greater than 0.")
+            sigPower = float(args[0])
+            if not np.isfinite(sigPower):
+                raise ValueError("The signal power input must be a finite number.")
     else:
-        sigPower = 1
+        sigPower = np.sum(np.abs(sig)**2) / sig.size  # Default to measured power
 
     # Validate power type
     isLinearScale = False
@@ -84,11 +85,9 @@ def awgn(sig, reqSNR, *args):
             sigPower = 10**(sigPower / 10)
         reqSNR = 10**(reqSNR / 10)
 
-    # Check for invalid signal power and SNR for linear scale
-    if isLinearScale and sigPower <= 0:
-        raise ValueError("The signal power must be positive for linear scale.")
-    if isLinearScale and reqSNR <= 0:
-        raise ValueError("The SNR must be positive for linear scale.")
+    # Ensure positive values after conversion
+    sigPower = np.abs(sigPower)
+    reqSNR = np.abs(reqSNR)
 
     noisePower = sigPower / reqSNR
 
@@ -99,6 +98,7 @@ def awgn(sig, reqSNR, *args):
         noise = np.sqrt(noisePower) * np.random.randn(*sig.shape)
     y = sig + noise
     return y
+
 
 def whiten(X, method='zca'):
     """
