@@ -26,11 +26,17 @@ def create_spike_colors(colormap, n_units):
     """
     cmap = plt.get_cmap(colormap)
     colors = []
-    for i in range(n_units):
-        normalized_idx = i / (n_units - 1) if n_units > 1 else 0
-        rgba = cmap(normalized_idx)
-        colors.append(f'rgb({int(rgba[0]*255)},{int(rgba[1]*255)},{int(rgba[2]*255)})')
-    return colors
+    if n_units <= 0:
+        return []
+    elif n_units == 1:
+        rgba = cmap(0)
+        return [f'rgb({int(rgba[0]*255)},{int(rgba[1]*255)},{int(rgba[2]*255)})']
+    else:
+        for i in range(n_units):
+            normalized_idx = i / (n_units - 1)
+            rgba = cmap(normalized_idx)
+            colors.append(f'rgb({int(rgba[0]*255)},{int(rgba[1]*255)},{int(rgba[2]*255)})')
+        return colors
 
 
 def plot_waveforms(source, spike_train, sampling_frequency, silhouette_scores=None,
@@ -329,7 +335,7 @@ def plot_spike_train(spike_train, sampling_frequency, silhouette_scores=None,
                   [int(x_range[0] * sampling_frequency), int(x_range[1] * sampling_frequency)],
             tickvals=np.arange(0, selected_spikeTrain.shape[0] + 1, selected_spikeTrain.shape[0] // 10),
             ticktext=np.arange(0, int(selected_spikeTrain.shape[0] / sampling_frequency) + 1,
-                               int(selected_spikeTrain.shape[0] / sampling_frequency / 10))
+                               (selected_spikeTrain.shape[0] / sampling_frequency / 10))
         ),
         yaxis=dict(
             title="Motor Unit",
