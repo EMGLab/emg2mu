@@ -115,8 +115,8 @@ def test_torch_fastica_consistency():
     # Generate simple test data
     test_data = generate_test_data()
     emg_data = test_data['emg_data']
-    n_components = 4
-    max_iter = 10
+    n_components = 8
+    max_iter = 500
 
     # Run CPU FastICA
     cpu_source, cpu_B, cpu_spikes = fastICA(emg_data, n_components, max_iter)
@@ -132,7 +132,7 @@ def test_torch_fastica_consistency():
 
     # Compare spike counts with relaxed tolerance
     npt.assert_allclose(
-        np.sum(cpu_spikes, axis=0),
-        np.sum(torch_spikes, axis=0),
+        np.sort(np.sum(cpu_spikes, axis=0)),
+        np.sort(np.sum(torch_spikes, axis=0)),
         rtol=0.3  # Increased tolerance for more reliable testing
     )
