@@ -160,13 +160,19 @@ def select_device(device_preference='auto'):
         The selected device string for torch
     """
     if device_preference != 'auto':
-        return device_preference
+        # Check for specific device and return if available, else fallback, recall select_device with 'auto'
+        if device_preference == 'cuda':
+            return 'cuda' if torch.cuda.is_available() else 'cpu'
+        elif device_preference == 'mps':
+            return 'mps' if torch.mps.is_available() else 'cpu'
+        else:
+            return device_preference
 
     # Check for CUDA
     if torch.cuda.is_available():
         return 'cuda'
     # Check for MPS (Apple Silicon)
-    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+    elif torch.mps.is_available():
         return 'mps'
     # Fallback to CPU
     return 'cpu'
