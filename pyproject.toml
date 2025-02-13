@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Decompose hd-EMG signals into motor units"
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "CC-BY-NC-SA-4.0" }
+license = { file = "LICENSE.md" }
 authors = [
     { name = "Seyed Yahya Shirazi", email = "shirazi@ieee.org" }
 ]
@@ -39,6 +39,11 @@ test = [
 [project.urls]
 Homepage = "https://github.com/neuromechanist/emg2mu"
 Download = "https://pypi.org/project/emg2mu"
+"Bug Tracker" = "https://github.com/neuromechanist/emgio/issues"
 
 [tool.setuptools.dynamic]
 version = {attr = "emg2mu.version.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["emg2mu*"]
